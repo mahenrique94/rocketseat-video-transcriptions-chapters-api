@@ -1,4 +1,5 @@
 import { nanoid } from 'nanoid'
+import pool from './index.ts'
 
 export interface Transcription {
   id: string
@@ -10,23 +11,28 @@ export interface Transcription {
   youtube_id: string
 }
 
-export const transcriptions: Transcription[] = []
-
-export function createTranscription(
+export async function createTranscription(
   youtubeUrl: string,
   youtubeId: string,
   userId: string,
-): Transcription {
+): Promise<Transcription> {
   const now = new Date().toISOString()
-  const transcription: Transcription = {
-    id: nanoid(),
-    created_at: now,
-    created_by: userId,
-    updated_at: now,
-    content: 'Fake transcription content',
-    youtube_url: youtubeUrl,
-    youtube_id: youtubeId,
-  }
-  transcriptions.push(transcription)
-  return transcription
+  const id = nanoid()
+
+  const result = await pool.query<Transcription>(
+    `INSERT INTO transcriptions (id, created_at, created_by, updated_at, content, youtube_url, youtube_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
+     RETURNING *`,
+    [id, now, userId, , 'Fake transcription content', youtubeUrl, youtubeId],
+  )
+
+  return result.rows[0]
+}
+
+export async function getTranscriptions(): Promise<Transcription[]> {
+  const result = await pool.query<Transcription>(
+    'SELECT * FROM transcriptions ORDER BY created_at DESC',
+  )
+
+  return result.rows
 }

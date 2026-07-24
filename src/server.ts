@@ -20,7 +20,7 @@ app.setErrorHandler((error, _, reply) => {
     })
   }
 
-  return reply.status(500).send({ message: 'Internal server error' })
+  return reply.status(500).send({ message: (error as Error).message })
 })
 
 app.decorateRequest<UserPayload>('user', undefined as unknown as UserPayload)
