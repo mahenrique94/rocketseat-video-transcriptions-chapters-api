@@ -9,6 +9,7 @@ import {
   hasZodFastifySchemaValidationErrors,
 } from '@fastify/type-provider-zod'
 import { transcriptionRoutes } from './routes/transcriptions.ts'
+import { isDbError, getDbError } from './utils/db-errors.ts'
 import type { UserPayload } from './types/fastify.ts'
 
 const app = fastify()
@@ -39,6 +40,14 @@ app.setErrorHandler((error, _, reply) => {
     return reply.status(400).send({
       message: 'Validation error',
       errors: error.validation,
+    })
+  }
+
+  if (isDbError(error)) {
+    const dbError = getDbError(error)
+    return reply.status(dbError.status).send({
+      message: dbError.message,
+      detail: dbError.detail,
     })
   }
 
