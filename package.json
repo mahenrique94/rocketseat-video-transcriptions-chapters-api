@@ -1,0 +1,28 @@
+{
+  "name": "rocketseat-fastify",
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "node --env-file=.env.local --watch src/server.ts",
+    "env:setup": "cp .env.example .env.local",
+    "infra:up": "docker compose up -d",
+    "infra:down": "docker compose down",
+    "local:setup": "npm run env:setup && npm run infra:up",
+    "db:migrate": "npx postgrator --config postgrator.config.json",
+    "db:migrate:down": "npx postgrator 0 --config postgrator.config.json"
+  },
+  "dependencies": {
+    "@fastify/type-provider-zod": "^1.0.0",
+    "fastify": "^5.10.0",
+    "nanoid": "^6.0.0",
+    "pg": "^8.22.0",
+    "postgrator-cli": "^10.0.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/nanoid": "^2.1.0",
+    "@types/node": "^26.1.1",
+    "@types/pg": "^8.20.0",
+    "typescript": "^7.0.2"
+  }
+}
