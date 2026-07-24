@@ -1,9 +1,0 @@
-CREATE TABLE IF NOT EXISTS transcriptions (
-  id VARCHAR(21) PRIMARY KEY,
-  created_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  created_by VARCHAR(255) NOT NULL,
-  updated_at TIMESTAMP WITH TIME ZONE NOT NULL,
-  content TEXT NOT NULL,
-  youtube_url TEXT NOT NULL,
-  youtube_id VARCHAR(11) NOT NULL
-);
