@@ -8,4 +8,6 @@ export const transcriptions = pgTable('transcriptions', {
   content: text('content').notNull(),
   youtubeUrl: text('youtube_url').notNull(),
   youtubeId: varchar('youtube_id', { length: 11 }).notNull(),
+  videoUrl: text('video_url').notNull(),
+  videoId: varchar('video_id').notNull(),
 })

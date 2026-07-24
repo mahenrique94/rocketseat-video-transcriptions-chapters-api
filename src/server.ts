@@ -1,7 +1,11 @@
 import fastify from 'fastify'
+import fastifySwagger from '@fastify/swagger'
+import ScalarApiReference from '@scalar/fastify-api-reference'
 import {
   serializerCompiler,
   validatorCompiler,
+  jsonSchemaTransform,
+  jsonSchemaTransformObject,
   hasZodFastifySchemaValidationErrors,
 } from '@fastify/type-provider-zod'
 import { transcriptionRoutes } from './routes/transcriptions.ts'
@@ -12,7 +16,25 @@ const app = fastify()
 app.setValidatorCompiler(validatorCompiler)
 app.setSerializerCompiler(serializerCompiler)
 
+app.register(fastifySwagger, {
+  openapi: {
+    info: {
+      title: 'Rocketseat Fastify API',
+      description: 'API de transcrições de vídeos do YouTube',
+      version: '1.0.0',
+    },
+  },
+  transform: jsonSchemaTransform,
+  transformObject: jsonSchemaTransformObject,
+})
+
+app.register(ScalarApiReference, {
+  routePrefix: '/api/docs',
+})
+
 app.setErrorHandler((error, _, reply) => {
+  console.error(error)
+
   if (hasZodFastifySchemaValidationErrors(error)) {
     return reply.status(400).send({
       message: 'Validation error',

@@ -9,10 +9,12 @@
     "infra:down": "docker compose down",
     "local:setup": "npm run env:setup && npm run infra:up",
     "db:generate": "npx drizzle-kit generate",
-    "db:migrate": "npx drizzle-kit migrate"
+    "db:migrate": "npx drizzle-kit migrate",
+    "types:check": "tsc --noEmit"
   },
   "dependencies": {
     "@fastify/type-provider-zod": "^1.0.0",
+    "@scalar/fastify-api-reference": "^1.63.0",
     "drizzle-orm": "^0.45.2",
     "fastify": "^5.10.0",
     "nanoid": "^6.0.0",
@@ -23,6 +25,7 @@
     "@types/nanoid": "^2.1.0",
     "@types/node": "^26.1.1",
     "@types/pg": "^8.20.0",
+    "dotenv": "^17.4.2",
     "drizzle-kit": "^0.31.10",
     "typescript": "^7.0.2"
   }
