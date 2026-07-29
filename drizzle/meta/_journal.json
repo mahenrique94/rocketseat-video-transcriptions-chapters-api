@@ -22,6 +22,27 @@
       "when": 1784858766367,
       "tag": "0002_melodic_doctor_octopus",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1785000000000,
+      "tag": "0003_thick_raider",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785283101415,
+      "tag": "0004_happy_sabra",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1785283607263,
+      "tag": "0005_nifty_black_tarantula",
+      "breakpoints": true
     }
   ]
 }
