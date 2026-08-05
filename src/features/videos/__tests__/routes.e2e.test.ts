@@ -1,9 +1,10 @@
-import { describe, it, before, after, afterEach, mock } from 'node:test'
+import { describe, it, before, beforeEach, after, afterEach, mock } from 'node:test'
 import assert from 'node:assert/strict'
 import pg from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq } from 'drizzle-orm'
 import * as schema from '@shared/db/schema'
+import { testJwtProvider, seedDbSession } from '@shared/utils/auth-test-helpers'
 
 const e2eDbUrl =
   process.env.E2E_DATABASE_URL ||
@@ -50,10 +51,18 @@ describe('E2E - /api/v2/videos', { skip: !dbAvailable ? 'DATABASE_URL not config
   if (!dbAvailable) return
 
   let app: ReturnType<typeof buildApp>
+  let authHeaders: { authorization: string }
+  let authUserId: string | undefined
 
   before(async () => {
-    app = buildApp()
+    app = buildApp({ jwtProvider: testJwtProvider })
     await app.ready()
+  })
+
+  beforeEach(async () => {
+    const seeded = await seedDbSession(testDb!, { sub: 'e2e-videos-user', role: 'admin' })
+    authHeaders = seeded.headers
+    authUserId = seeded.userId
   })
 
   after(async () => {
@@ -62,6 +71,10 @@ describe('E2E - /api/v2/videos', { skip: !dbAvailable ? 'DATABASE_URL not config
   })
 
   afterEach(async () => {
+    if (testDb && authUserId) {
+      await testDb.delete(schema.users).where(eq(schema.users.id, authUserId))
+      authUserId = undefined
+    }
     if (testDb) {
       for (const id of createdVideoIds) {
         await testDb.delete(schema.videos).where(eq(schema.videos.id, id))
@@ -75,7 +88,10 @@ describe('E2E - /api/v2/videos', { skip: !dbAvailable ? 'DATABASE_URL not config
     url: string
     body?: Record<string, unknown>
   }) {
-    return app.inject(options)
+    return app.inject({
+      ...options,
+      headers: authHeaders,
+    })
   }
 
   it('GET /api/v2/videos - deve retornar lista vazia', async () => {
@@ -97,7 +113,7 @@ describe('E2E - /api/v2/videos', { skip: !dbAvailable ? 'DATABASE_URL not config
     assert.strictEqual(body.videoUrl, 'https://youtu.be/dQw4w9WgXcQ')
     assert.strictEqual(body.videoId, 'dQw4w9WgXcQ')
     assert.ok(body.id)
-    assert.strictEqual(body.createdBy, 'user-001')
+    assert.strictEqual(body.createdBy, 'e2e-videos-user')
     assert.ok(body.createdAt)
     assert.ok(body.updatedAt)
     createdVideoIds.add(body.id)

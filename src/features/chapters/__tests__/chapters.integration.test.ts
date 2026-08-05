@@ -6,6 +6,8 @@ import { VideosInMemoryRepository } from '@features/videos/infrastructure/storag
 import { ChaptersInMemoryRepository } from '@features/chapters/infrastructure/storage/chapters-in-memory-repository'
 import type { IVideosRepository } from '@features/videos/infrastructure/storage/videos-repository'
 import type { IChaptersRepository } from '../infrastructure/storage/chapters-repository'
+import { testJwtProvider, seedSession } from '@shared/utils/auth-test-helpers'
+import { SessionsInMemoryRepository } from '@features/users/infrastructure/storage/sessions-in-memory-repository'
 
 const suppressConsole = mock.method(console, 'error', () => {})
 after(() => suppressConsole.mock.restore())
@@ -66,13 +68,29 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
   let app: ReturnType<typeof buildApp>
   let videoRepository: VideosInMemoryRepository
   let chaptersRepository: ChaptersInMemoryRepository
+  let sessionsRepository: SessionsInMemoryRepository
+  let authHeaders: { authorization: string }
+  let adminHeaders: { authorization: string }
 
   beforeEach(async () => {
     videoRepository = new VideosInMemoryRepository()
     chaptersRepository = new ChaptersInMemoryRepository()
-    app = buildApp({ videoRepository, chaptersRepository })
+    sessionsRepository = new SessionsInMemoryRepository()
+    authHeaders = (await seedSession(sessionsRepository)).headers
+    adminHeaders = (await seedSession(sessionsRepository, { sub: 'admin-001', role: 'admin' })).headers
+    app = buildApp({ videoRepository, chaptersRepository, sessionsRepository, jwtProvider: testJwtProvider })
     await app.ready()
   })
+
+  function inject(options: {
+    method: 'GET' | 'POST' | 'DELETE'
+    url: string
+  }, headers: { authorization: string } = authHeaders) {
+    return app.inject({
+      ...options,
+      headers,
+    })
+  }
 
   afterEach(async () => {
     await app.close()
@@ -82,10 +100,10 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
     it('deve gerar capítulos e retornar 201', async () => {
       await seedVideo(videoRepository)
 
-      const response = await app.inject({
+      const response = await inject({
         method: 'POST',
         url: '/api/v2/videos/video-001/chapters',
-      })
+      }, adminHeaders)
 
       assert.strictEqual(response.statusCode, 201)
       const body = response.json()
@@ -97,10 +115,10 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
     })
 
     it('deve retornar 404 para vídeo inexistente', async () => {
-      const response = await app.inject({
+      const response = await inject({
         method: 'POST',
         url: '/api/v2/videos/video-inexistente/chapters',
-      })
+      }, adminHeaders)
 
       assert.strictEqual(response.statusCode, 404)
       assert.strictEqual(response.json().message, 'Vídeo não encontrado')
@@ -110,10 +128,10 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
       await seedVideo(videoRepository)
       await seedChapters(chaptersRepository, 'video-001')
 
-      const response = await app.inject({
+      const response = await inject({
         method: 'POST',
         url: '/api/v2/videos/video-001/chapters',
-      })
+      }, adminHeaders)
 
       assert.strictEqual(response.statusCode, 409)
       assert.strictEqual(response.json().message, 'Vídeo já possui capítulos')
@@ -125,7 +143,7 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
       await seedVideo(videoRepository)
       await seedChapters(chaptersRepository, 'video-001')
 
-      const response = await app.inject({
+      const response = await inject({
         method: 'GET',
         url: '/api/v2/videos/video-001/chapters',
       })
@@ -138,7 +156,7 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
     })
 
     it('deve retornar 404 para vídeo inexistente', async () => {
-      const response = await app.inject({
+      const response = await inject({
         method: 'GET',
         url: '/api/v2/videos/video-inexistente/chapters',
       })
@@ -150,7 +168,7 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
     it('deve retornar 404 quando o vídeo não possui capítulos', async () => {
       await seedVideo(videoRepository)
 
-      const response = await app.inject({
+      const response = await inject({
         method: 'GET',
         url: '/api/v2/videos/video-001/chapters',
       })
@@ -164,7 +182,7 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
       await seedChapters(chaptersRepository, 'video-001')
       await chaptersRepository.softDeleteChapters('video-001')
 
-      const response = await app.inject({
+      const response = await inject({
         method: 'GET',
         url: '/api/v2/videos/video-001/chapters',
       })
@@ -179,15 +197,15 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
       await seedVideo(videoRepository)
       await seedChapters(chaptersRepository, 'video-001')
 
-      const response = await app.inject({
+      const response = await inject({
         method: 'DELETE',
         url: '/api/v2/videos/video-001/chapters',
-      })
+      }, adminHeaders)
 
       assert.strictEqual(response.statusCode, 200)
       assert.deepStrictEqual(response.json(), { message: 'Capítulos removidos com sucesso' })
 
-      const afterDelete = await app.inject({
+      const afterDelete = await inject({
         method: 'GET',
         url: '/api/v2/videos/video-001/chapters',
       })
@@ -195,10 +213,10 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
     })
 
     it('deve retornar 404 para vídeo inexistente', async () => {
-      const response = await app.inject({
+      const response = await inject({
         method: 'DELETE',
         url: '/api/v2/videos/video-inexistente/chapters',
-      })
+      }, adminHeaders)
 
       assert.strictEqual(response.statusCode, 404)
       assert.strictEqual(response.json().message, 'Vídeo não encontrado')
@@ -207,13 +225,23 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
     it('deve retornar 404 quando o vídeo não possui capítulos', async () => {
       await seedVideo(videoRepository)
 
-      const response = await app.inject({
+      const response = await inject({
         method: 'DELETE',
         url: '/api/v2/videos/video-001/chapters',
-      })
+      }, adminHeaders)
 
       assert.strictEqual(response.statusCode, 404)
       assert.strictEqual(response.json().message, 'Capítulos não encontrados')
     })
+  })
+
+  it('DELETE - deve retornar 403 para usuário comum', async () => {
+    const response = await inject({
+      method: 'DELETE',
+      url: '/api/v2/videos/video-001/chapters',
+    })
+
+    assert.strictEqual(response.statusCode, 403)
+    assert.strictEqual(response.json().message, 'Acesso restrito a administradores')
   })
 })

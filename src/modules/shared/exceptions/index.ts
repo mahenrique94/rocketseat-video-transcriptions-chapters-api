@@ -1,2 +1,4 @@
 export { EntityNotFound } from './entity-not-found.ts'
 export { EntityAlreadyExists } from './entity-already-exists.ts'
+export { InvalidCredentials } from './invalid-credentials.ts'
+export { InvalidRefreshToken } from './invalid-refresh-token.ts'

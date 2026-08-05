@@ -5,6 +5,8 @@ import { DatabaseError } from 'pg'
 import type { IVideosRepository } from '../infrastructure/storage/videos-repository.ts'
 import { Video } from '@features/videos/domain/video'
 import { VideosInMemoryRepository } from '@features/videos/infrastructure/storage/videos-in-memory-repository'
+import { testJwtProvider, seedSession } from '@shared/utils/auth-test-helpers'
+import { SessionsInMemoryRepository } from '@features/users/infrastructure/storage/sessions-in-memory-repository'
 
 const suppressConsole = mock.method(console, 'error', () => {})
 after(() => suppressConsole.mock.restore())
@@ -47,19 +49,36 @@ function seedVideo(videoRepository: IVideosRepository, id: string, createdAt: Da
 describe('/api/v2/videos', () => {
   let app: ReturnType<typeof buildApp>
   let videoRepository: VideosInMemoryRepository
+  let sessionsRepository: SessionsInMemoryRepository
+  let authHeaders: { authorization: string }
+  let adminHeaders: { authorization: string }
 
   beforeEach(async () => {
     videoRepository = new VideosInMemoryRepository()
-    app = buildApp({ videoRepository })
+    sessionsRepository = new SessionsInMemoryRepository()
+    authHeaders = (await seedSession(sessionsRepository)).headers
+    adminHeaders = (await seedSession(sessionsRepository, { sub: 'admin-001', role: 'admin' })).headers
+    app = buildApp({ videoRepository, sessionsRepository, jwtProvider: testJwtProvider })
     await app.ready()
   })
+
+  function inject(options: {
+    method: 'GET' | 'POST'
+    url: string
+    body?: Record<string, unknown>
+  }, headers: { authorization: string } = authHeaders) {
+    return app.inject({
+      ...options,
+      headers,
+    })
+  }
 
   afterEach(async () => {
     await app.close()
   })
 
   it('GET - deve retornar lista vazia com status 200', async () => {
-    const response = await app.inject({
+    const response = await     inject({
       method: 'GET',
       url: '/api/v2/videos',
     })
@@ -72,7 +91,7 @@ describe('/api/v2/videos', () => {
     await seedVideo(videoRepository, 'video-001', new Date('2024-01-01T00:00:00.000Z'))
     await seedVideo(videoRepository, 'video-002', new Date('2024-01-02T00:00:00.000Z'))
 
-    const response = await app.inject({
+    const response = await     inject({
       method: 'GET',
       url: '/api/v2/videos',
     })
@@ -87,7 +106,7 @@ describe('/api/v2/videos', () => {
   it('GET /:id - deve retornar vídeo existente com status 200', async () => {
     await seedVideo(videoRepository, 'video-001', new Date('2024-01-01T00:00:00.000Z'))
 
-    const response = await app.inject({
+    const response = await     inject({
       method: 'GET',
       url: '/api/v2/videos/video-001',
     })
@@ -101,7 +120,7 @@ describe('/api/v2/videos', () => {
   })
 
   it('GET /:id - deve retornar 404 para ID inexistente', async () => {
-    const response = await app.inject({
+    const response = await     inject({
       method: 'GET',
       url: '/api/v2/videos/id-inexistente',
     })
@@ -111,30 +130,30 @@ describe('/api/v2/videos', () => {
   })
 
   it('POST - deve criar vídeo com URL válida e retornar 201', async () => {
-    const response = await app.inject({
+    const response = await     inject({
       method: 'POST',
       url: '/api/v2/videos',
       body: { url: 'https://youtu.be/dQw4w9WgXcQ' },
-    })
+    }, adminHeaders)
 
     assert.strictEqual(response.statusCode, 201)
     const body = response.json()
     assert.strictEqual(body.videoUrl, 'https://youtu.be/dQw4w9WgXcQ')
     assert.strictEqual(body.videoId, 'dQw4w9WgXcQ')
     assert.ok(body.id)
-    assert.strictEqual(body.createdBy, 'user-001')
+    assert.strictEqual(body.createdBy, 'admin-001')
   })
 
   it('POST - deve persistir o vídeo criado', async () => {
-    const createResponse = await app.inject({
+    const createResponse = await     inject({
       method: 'POST',
       url: '/api/v2/videos',
       body: { url: 'https://youtu.be/dQw4w9WgXcQ' },
-    })
+    }, adminHeaders)
 
     const created = createResponse.json()
 
-    const getResponse = await app.inject({
+    const getResponse = await     inject({
       method: 'GET',
       url: `/api/v2/videos/${created.id}`,
     })
@@ -145,22 +164,22 @@ describe('/api/v2/videos', () => {
   })
 
   it('POST - deve retornar 400 para URL inválida', async () => {
-    const response = await app.inject({
+    const response = await     inject({
       method: 'POST',
       url: '/api/v2/videos',
       body: { url: 'not-a-valid-url' },
-    })
+    }, adminHeaders)
 
     assert.strictEqual(response.statusCode, 400)
     assert.strictEqual(response.json().message, 'Validation error')
   })
 
   it('POST - deve retornar 400 para corpo vazio', async () => {
-    const response = await app.inject({
+    const response = await     inject({
       method: 'POST',
       url: '/api/v2/videos',
       body: {},
-    })
+    }, adminHeaders)
 
     assert.strictEqual(response.statusCode, 400)
     assert.strictEqual(response.json().message, 'Validation error')
@@ -178,7 +197,7 @@ describe('/api/v2/videos', () => {
       },
     }
 
-    const throwingApp = buildApp({ videoRepository: throwingRepository })
+    const throwingApp = buildApp({ videoRepository: throwingRepository, sessionsRepository, jwtProvider: testJwtProvider })
     await throwingApp.ready()
 
     try {
@@ -186,6 +205,7 @@ describe('/api/v2/videos', () => {
         method: 'POST',
         url: '/api/v2/videos',
         body: { url: 'https://youtu.be/dQw4w9WgXcQ' },
+        headers: adminHeaders,
       })
 
       assert.strictEqual(response.statusCode, 409)
@@ -204,7 +224,7 @@ describe('/api/v2/videos', () => {
       },
     }
 
-    const throwingApp = buildApp({ videoRepository: throwingRepository })
+    const throwingApp = buildApp({ videoRepository: throwingRepository, sessionsRepository, jwtProvider: testJwtProvider })
     await throwingApp.ready()
 
     try {
@@ -212,6 +232,7 @@ describe('/api/v2/videos', () => {
         method: 'POST',
         url: '/api/v2/videos',
         body: { url: 'https://youtu.be/dQw4w9WgXcQ' },
+        headers: adminHeaders,
       })
 
       assert.strictEqual(response.statusCode, 500)
@@ -219,5 +240,37 @@ describe('/api/v2/videos', () => {
     } finally {
       await throwingApp.close()
     }
+  })
+
+  it('POST - deve retornar 403 para usuário comum', async () => {
+    const response = await inject({
+      method: 'POST',
+      url: '/api/v2/videos',
+      body: { url: 'https://youtu.be/dQw4w9WgXcQ' },
+    })
+
+    assert.strictEqual(response.statusCode, 403)
+    assert.strictEqual(response.json().message, 'Acesso restrito a administradores')
+  })
+
+  it('GET - deve retornar 401 sem token de autenticação', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v2/videos',
+    })
+
+    assert.strictEqual(response.statusCode, 401)
+    assert.strictEqual(response.json().message, 'Token de autenticação não informado')
+  })
+
+  it('GET - deve retornar 401 com token inválido', async () => {
+    const response = await app.inject({
+      method: 'GET',
+      url: '/api/v2/videos',
+      headers: { authorization: 'Bearer token-invalido' },
+    })
+
+    assert.strictEqual(response.statusCode, 401)
+    assert.strictEqual(response.json().message, 'Token de autenticação inválido ou expirado')
   })
 })
