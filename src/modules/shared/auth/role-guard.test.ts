@@ -62,16 +62,16 @@ describe('RoleGuard', () => {
     assert.strictEqual(reply.sent, undefined)
   })
 
-  it('deve responder 403 para POST de usuário comum', async () => {
+  it('deve responder 404 para POST de usuário comum', async () => {
     const reply = createMockReply()
 
     await guard.execute(makeRequest('POST', '/api/v2/videos', 'user'), reply as unknown as FastifyReply)
 
-    assert.strictEqual(reply.statusCode, 403)
-    assert.deepStrictEqual(reply.sent, { message: 'Acesso restrito a administradores' })
+    assert.strictEqual(reply.statusCode, 404)
+    assert.deepStrictEqual(reply.sent, { message: 'Not found' })
   })
 
-  it('deve responder 403 para DELETE de usuário comum', async () => {
+  it('deve responder 404 para DELETE de usuário comum', async () => {
     const reply = createMockReply()
 
     await guard.execute(
@@ -79,16 +79,16 @@ describe('RoleGuard', () => {
       reply as unknown as FastifyReply,
     )
 
-    assert.strictEqual(reply.statusCode, 403)
+    assert.strictEqual(reply.statusCode, 404)
   })
 
-  it('deve responder 403 para PUT e PATCH de usuário comum', async () => {
+  it('deve responder 404 para PUT e PATCH de usuário comum', async () => {
     for (const method of ['PUT', 'PATCH']) {
       const reply = createMockReply()
 
       await guard.execute(makeRequest(method, '/api/v2/videos', 'user'), reply as unknown as FastifyReply)
 
-      assert.strictEqual(reply.statusCode, 403, `method ${method}`)
+      assert.strictEqual(reply.statusCode, 404, `method ${method}`)
     }
   })
 

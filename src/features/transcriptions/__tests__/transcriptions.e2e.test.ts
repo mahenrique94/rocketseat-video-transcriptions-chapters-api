@@ -3,12 +3,11 @@ import assert from 'node:assert/strict'
 import pg from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq } from 'drizzle-orm'
-import * as schema from '@shared/db/schema'
+import * as schema from '@externals/db/schema'
 import { testJwtProvider, seedDbSession } from '@shared/utils/auth-test-helpers'
+import { config } from '@shared/config/index'
 
-const e2eDbUrl =
-  process.env.E2E_DATABASE_URL ||
-  process.env.DATABASE_URL
+const e2eDbUrl = config.E2E_DATABASE_URL || config.DATABASE_URL
 
 const dbAvailable = !!e2eDbUrl
 

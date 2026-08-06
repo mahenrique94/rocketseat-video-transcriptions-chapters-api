@@ -1,0 +1,1 @@
+ALTER TABLE "sessions" ADD CONSTRAINT "sessions_user_id_unique" UNIQUE("user_id");

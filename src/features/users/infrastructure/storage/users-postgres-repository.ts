@@ -20,6 +20,9 @@ export class UsersPostgresRepository implements IUsersRepository {
         updatedAt: user.updatedAt,
         active: user.active,
         role: user.role,
+        deletedAt: user.deletedAt,
+        confirmationTokenHash: user.confirmationTokenHash,
+        confirmationTokenExpiresAt: user.confirmationTokenExpiresAt,
       })
       .returning()
 
@@ -42,6 +45,40 @@ export class UsersPostgresRepository implements IUsersRepository {
     if (!result) {
       return null
     }
+
+    return User.toEntity(result)
+  }
+
+  async findByConfirmationTokenHash(tokenHash: string) {
+    const [result] = await this.db
+      .select()
+      .from(users)
+      .where(eq(users.confirmationTokenHash, tokenHash))
+
+    if (!result) {
+      return null
+    }
+
+    return User.toEntity(result)
+  }
+
+  async updateUser(user: User) {
+    const [result] = await this.db
+      .update(users)
+      .set({
+        firstName: user.firstName,
+        lastName: user.lastName,
+        email: user.email,
+        password: user.password,
+        updatedAt: user.updatedAt,
+        active: user.active,
+        role: user.role,
+        deletedAt: user.deletedAt,
+        confirmationTokenHash: user.confirmationTokenHash,
+        confirmationTokenExpiresAt: user.confirmationTokenExpiresAt,
+      })
+      .where(eq(users.id, user.id))
+      .returning()
 
     return User.toEntity(result)
   }

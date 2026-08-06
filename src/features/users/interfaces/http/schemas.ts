@@ -31,6 +31,7 @@ export const userResponseSchema = z
     updatedAt: z.date().describe('Data de atualização'),
     active: z.boolean().describe('Se o usuário está ativo'),
     role: z.enum(['user', 'admin']).describe('Perfil de acesso do usuário'),
+    confirmationToken: z.string().describe('Token para confirmar a conta'),
   })
   .describe('Usuário criado')
 
@@ -59,3 +60,15 @@ export const signOutResponseSchema = z
     message: z.string().describe('Mensagem de confirmação'),
   })
   .describe('Resultado do encerramento de sessão')
+
+export const confirmAccountBodySchema = z
+  .object({
+    token: z.string().min(1).describe('Token de confirmação da conta'),
+  })
+  .describe('Dados de confirmação de conta')
+
+export const confirmAccountResponseSchema = z
+  .object({
+    message: z.string().describe('Mensagem de confirmação'),
+  })
+  .describe('Resultado da confirmação de conta')

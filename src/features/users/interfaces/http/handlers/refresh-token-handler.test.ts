@@ -76,7 +76,7 @@ describe('RefreshTokenHandler', () => {
     assert.strictEqual(useCase.calls[0].refreshToken, 'old-refresh-token')
   })
 
-  it('deve responder 403 quando o refresh token é inválido ou expirado', async () => {
+  it('deve responder 404 quando o refresh token é inválido ou expirado', async () => {
     const useCase = makeUseCase({
       error: new InvalidRefreshToken('Refresh token inválido ou expirado'),
     })
@@ -90,7 +90,7 @@ describe('RefreshTokenHandler', () => {
 
     await handler.execute(request, reply as unknown as FastifyReply)
 
-    assert.strictEqual(reply.statusCode, 403)
+    assert.strictEqual(reply.statusCode, 404)
     assert.deepStrictEqual(reply.sent, { message: 'Refresh token inválido ou expirado' })
   })
 

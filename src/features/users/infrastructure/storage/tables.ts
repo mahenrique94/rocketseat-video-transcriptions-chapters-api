@@ -12,6 +12,8 @@ export const users = pgTable('users', {
   active: boolean('active').notNull(),
   role: text('role').$type<UserRole>().notNull().default('user'),
   deletedAt: timestamp('deleted_at', { withTimezone: true }),
+  confirmationTokenHash: text('confirmation_token_hash').unique(),
+  confirmationTokenExpiresAt: timestamp('confirmation_token_expires_at', { withTimezone: true }),
 })
 
 export type User = typeof users.$inferSelect

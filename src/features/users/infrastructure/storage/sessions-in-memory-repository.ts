@@ -4,8 +4,8 @@ import type { ISessionsRepository } from './sessions-repository.ts'
 export class SessionsInMemoryRepository implements ISessionsRepository {
   private sessions: Session[] = []
 
-  async save(session: Session): Promise<Session> {
-    const index = this.sessions.findIndex((stored) => stored.id === session.id)
+  async upsertByUserId(session: Session): Promise<Session> {
+    const index = this.sessions.findIndex((stored) => stored.userId === session.userId)
 
     if (index >= 0) {
       this.sessions[index] = session
@@ -20,19 +20,11 @@ export class SessionsInMemoryRepository implements ISessionsRepository {
     return this.sessions.find((session) => session.jtiHash === jtiHash) ?? null
   }
 
-  async revokeAllActiveByUserId(userId: string): Promise<void> {
-    for (const session of this.sessions) {
-      if (session.userId === userId && !session.isRevoked()) {
-        this.sessions[this.sessions.indexOf(session)] = session.revoke()
-      }
-    }
-  }
-
-  async revokeByJtiHash(jtiHash: string): Promise<void> {
+  async deleteByJtiHash(jtiHash: string): Promise<void> {
     const index = this.sessions.findIndex((session) => session.jtiHash === jtiHash)
 
     if (index >= 0) {
-      this.sessions[index] = this.sessions[index].revoke()
+      this.sessions.splice(index, 1)
     }
   }
 }

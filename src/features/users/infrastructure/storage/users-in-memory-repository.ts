@@ -16,4 +16,18 @@ export class UsersInMemoryRepository implements IUsersRepository {
   async findById(id: string): Promise<User | null> {
     return this.users.find((user) => user.id === id) ?? null
   }
+
+  async findByConfirmationTokenHash(tokenHash: string): Promise<User | null> {
+    return this.users.find((user) => user.confirmationTokenHash === tokenHash) ?? null
+  }
+
+  async updateUser(user: User): Promise<User> {
+    const index = this.users.findIndex((stored) => stored.id === user.id)
+
+    if (index >= 0) {
+      this.users[index] = user
+    }
+
+    return user
+  }
 }

@@ -10,5 +10,6 @@ export class ReturnUserDTO {
     public readonly updatedAt: Date,
     public readonly active: boolean,
     public readonly role: UserRole,
+    public readonly confirmationToken: string,
   ) {}
 }

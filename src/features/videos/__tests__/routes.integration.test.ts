@@ -7,6 +7,7 @@ import { Video } from '@features/videos/domain/video'
 import { VideosInMemoryRepository } from '@features/videos/infrastructure/storage/videos-in-memory-repository'
 import { testJwtProvider, seedSession } from '@shared/utils/auth-test-helpers'
 import { SessionsInMemoryRepository } from '@features/users/infrastructure/storage/sessions-in-memory-repository'
+import { UsersInMemoryRepository } from '@features/users/infrastructure/storage/users-in-memory-repository'
 
 const suppressConsole = mock.method(console, 'error', () => {})
 after(() => suppressConsole.mock.restore())
@@ -50,15 +51,17 @@ describe('/api/v2/videos', () => {
   let app: ReturnType<typeof buildApp>
   let videoRepository: VideosInMemoryRepository
   let sessionsRepository: SessionsInMemoryRepository
+  let usersRepository: UsersInMemoryRepository
   let authHeaders: { authorization: string }
   let adminHeaders: { authorization: string }
 
   beforeEach(async () => {
     videoRepository = new VideosInMemoryRepository()
     sessionsRepository = new SessionsInMemoryRepository()
-    authHeaders = (await seedSession(sessionsRepository)).headers
-    adminHeaders = (await seedSession(sessionsRepository, { sub: 'admin-001', role: 'admin' })).headers
-    app = buildApp({ videoRepository, sessionsRepository, jwtProvider: testJwtProvider })
+    usersRepository = new UsersInMemoryRepository()
+    authHeaders = (await seedSession(sessionsRepository, {}, usersRepository)).headers
+    adminHeaders = (await seedSession(sessionsRepository, { sub: 'admin-001', role: 'admin' }, usersRepository)).headers
+    app = buildApp({ videoRepository, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
     await app.ready()
   })
 
@@ -197,7 +200,7 @@ describe('/api/v2/videos', () => {
       },
     }
 
-    const throwingApp = buildApp({ videoRepository: throwingRepository, sessionsRepository, jwtProvider: testJwtProvider })
+    const throwingApp = buildApp({ videoRepository: throwingRepository, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
     await throwingApp.ready()
 
     try {
@@ -224,7 +227,7 @@ describe('/api/v2/videos', () => {
       },
     }
 
-    const throwingApp = buildApp({ videoRepository: throwingRepository, sessionsRepository, jwtProvider: testJwtProvider })
+    const throwingApp = buildApp({ videoRepository: throwingRepository, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
     await throwingApp.ready()
 
     try {
@@ -242,35 +245,35 @@ describe('/api/v2/videos', () => {
     }
   })
 
-  it('POST - deve retornar 403 para usuário comum', async () => {
+  it('POST - deve retornar 404 para usuário comum', async () => {
     const response = await inject({
       method: 'POST',
       url: '/api/v2/videos',
       body: { url: 'https://youtu.be/dQw4w9WgXcQ' },
     })
 
-    assert.strictEqual(response.statusCode, 403)
-    assert.strictEqual(response.json().message, 'Acesso restrito a administradores')
+    assert.strictEqual(response.statusCode, 404)
+    assert.strictEqual(response.json().message, 'Not found')
   })
 
-  it('GET - deve retornar 401 sem token de autenticação', async () => {
+  it('GET - deve retornar 404 sem token de autenticação', async () => {
     const response = await app.inject({
       method: 'GET',
       url: '/api/v2/videos',
     })
 
-    assert.strictEqual(response.statusCode, 401)
-    assert.strictEqual(response.json().message, 'Token de autenticação não informado')
+    assert.strictEqual(response.statusCode, 404)
+    assert.strictEqual(response.json().message, 'Not found')
   })
 
-  it('GET - deve retornar 401 com token inválido', async () => {
+  it('GET - deve retornar 404 com token inválido', async () => {
     const response = await app.inject({
       method: 'GET',
       url: '/api/v2/videos',
       headers: { authorization: 'Bearer token-invalido' },
     })
 
-    assert.strictEqual(response.statusCode, 401)
-    assert.strictEqual(response.json().message, 'Token de autenticação inválido ou expirado')
+    assert.strictEqual(response.statusCode, 404)
+    assert.strictEqual(response.json().message, 'Not found')
   })
 })

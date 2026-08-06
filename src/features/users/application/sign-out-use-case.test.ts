@@ -17,13 +17,13 @@ describe('SignOutUseCase', () => {
     useCase = new SignOutUseCase(sessionsRepository, refreshTokensRepository)
   })
 
-  it('deve revogar a sessão atual e os refresh tokens ativos do usuário', async () => {
+  it('deve deletar a sessão atual e revogar os refresh tokens ativos do usuário', async () => {
     const session = Session.create({
       userId: 'user-001',
       jti: 'jti-atual',
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
-    await sessionsRepository.save(session)
+    await sessionsRepository.upsertByUserId(session)
 
     const refreshToken = RefreshToken.create({
       userId: 'user-001',
@@ -39,13 +39,12 @@ describe('SignOutUseCase', () => {
       RefreshToken.hashToken('refresh-ativo'),
     )
 
-    assert.ok(storedSession)
-    assert.strictEqual(storedSession.isRevoked(), true)
+    assert.strictEqual(storedSession, null)
     assert.ok(storedRefresh)
     assert.strictEqual(storedRefresh.isRevoked(), true)
   })
 
-  it('deve revogar apenas a sessão do usuário e manter a de outro usuário', async () => {
+  it('deve deletar apenas a sessão do usuário e manter a de outro usuário', async () => {
     const sessionOwn = Session.create({
       userId: 'user-001',
       jti: 'jti-own',
@@ -56,16 +55,17 @@ describe('SignOutUseCase', () => {
       jti: 'jti-other',
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
-    await sessionsRepository.save(sessionOwn)
-    await sessionsRepository.save(sessionOther)
+    await sessionsRepository.upsertByUserId(sessionOwn)
+    await sessionsRepository.upsertByUserId(sessionOther)
 
     await useCase.execute({ userId: 'user-001', jti: 'jti-own' })
 
     const storedOwn = await sessionsRepository.findByJtiHash(Session.hashJti('jti-own'))
     const storedOther = await sessionsRepository.findByJtiHash(Session.hashJti('jti-other'))
 
-    assert.strictEqual(storedOwn?.isRevoked(), true)
-    assert.strictEqual(storedOther?.isRevoked(), false)
+    assert.strictEqual(storedOwn, null)
+    assert.ok(storedOther)
+    assert.strictEqual(storedOther.userId, 'user-002')
   })
 
   it('não deve lançar erro quando não existem sessão ou refresh tokens', async () => {

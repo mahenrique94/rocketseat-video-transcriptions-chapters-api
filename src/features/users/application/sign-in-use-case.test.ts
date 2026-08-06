@@ -40,14 +40,17 @@ describe('SignInUseCase', () => {
     )
   })
 
-  async function seedUser(email = 'john@example.com', password = 'secret123') {
-    const passwordHash = await hash(password, 10)
-    const user = User.create({
+  async function seedUser(overrides: { active?: boolean } = {}) {
+    const passwordHash = await hash('secret123', 10)
+    let user = User.create({
       firstName: 'John',
       lastName: 'Doe',
-      email,
+      email: 'john@example.com',
       password: passwordHash,
     })
+    if (overrides.active !== false) {
+      user = user.activate()
+    }
     await usersRepository.createUser(user)
     return user
   }
@@ -127,10 +130,9 @@ describe('SignInUseCase', () => {
     const session = await sessionsRepository.findByJtiHash(Session.hashJti(jti!))
     assert.ok(session)
     assert.strictEqual(session.userId, user.id)
-    assert.strictEqual(session.isRevoked(), false)
   })
 
-  it('deve revogar a sessão anterior ao fazer um novo login (uma sessão por usuário)', async () => {
+  it('deve substituir a sessão anterior ao fazer um novo login (uma sessão por usuário)', async () => {
     await seedUser()
 
     const signedJtis: string[] = []
@@ -151,10 +153,9 @@ describe('SignInUseCase', () => {
     const firstSession = await sessionsRepository.findByJtiHash(Session.hashJti(signedJtis[0]))
     const secondSession = await sessionsRepository.findByJtiHash(Session.hashJti(signedJtis[1]))
 
-    assert.ok(firstSession)
-    assert.strictEqual(firstSession.isRevoked(), true)
+    assert.strictEqual(firstSession, null)
     assert.ok(secondSession)
-    assert.strictEqual(secondSession.isRevoked(), false)
+    assert.strictEqual(secondSession.userId, (await usersRepository.findByEmail('john@example.com'))!.id)
   })
 
   it('deve lançar InvalidCredentials quando o e-mail não existe', async () => {
@@ -178,6 +179,22 @@ describe('SignInUseCase', () => {
       useCase.execute({
         email: 'john@example.com',
         password: 'senha-errada',
+      }),
+      (error) => {
+        assert.ok(error instanceof InvalidCredentials)
+        assert.strictEqual(error.message, 'Email ou senha inválidos')
+        return true
+      },
+    )
+  })
+
+  it('deve lançar InvalidCredentials quando a conta ainda não está ativa', async () => {
+    await seedUser({ active: false })
+
+    await assert.rejects(
+      useCase.execute({
+        email: 'john@example.com',
+        password: 'secret123',
       }),
       (error) => {
         assert.ok(error instanceof InvalidCredentials)

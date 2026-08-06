@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { nanoid } from 'nanoid'
 
 export type UserRole = 'user' | 'admin'
@@ -14,6 +15,8 @@ export class User {
     public readonly active: boolean,
     public readonly deletedAt: Date | null,
     public readonly role: UserRole,
+    public readonly confirmationTokenHash: string | null,
+    public readonly confirmationTokenExpiresAt: Date | null,
   ) {}
 
   static create(params: {
@@ -32,10 +35,16 @@ export class User {
       params.password,
       now,
       now,
-      true,
+      false,
       null,
       params.role ?? 'user',
+      null,
+      null,
     )
+  }
+
+  static hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex')
   }
 
   static toEntity(data: {
@@ -49,6 +58,8 @@ export class User {
     active: boolean
     deletedAt: Date | null
     role: UserRole
+    confirmationTokenHash: string | null
+    confirmationTokenExpiresAt: Date | null
   }) {
     return new User(
       data.id,
@@ -61,6 +72,49 @@ export class User {
       data.active,
       data.deletedAt,
       data.role,
+      data.confirmationTokenHash,
+      data.confirmationTokenExpiresAt,
+    )
+  }
+
+  setConfirmationToken(tokenHash: string, expiresAt: Date): User {
+    return new User(
+      this.id,
+      this.firstName,
+      this.lastName,
+      this.email,
+      this.password,
+      this.createdAt,
+      new Date(),
+      this.active,
+      this.deletedAt,
+      this.role,
+      tokenHash,
+      expiresAt,
+    )
+  }
+
+  activate(): User {
+    return new User(
+      this.id,
+      this.firstName,
+      this.lastName,
+      this.email,
+      this.password,
+      this.createdAt,
+      new Date(),
+      true,
+      this.deletedAt,
+      this.role,
+      null,
+      null,
+    )
+  }
+
+  isConfirmationTokenExpired(now = new Date()): boolean {
+    return (
+      this.confirmationTokenExpiresAt !== null &&
+      this.confirmationTokenExpiresAt <= now
     )
   }
 }

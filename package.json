@@ -12,11 +12,11 @@
     "db:migrate": "npx drizzle-kit migrate",
     "db:push": "npx drizzle-kit push",
     "types:check": "tsc --noEmit",
-    "test": "node --import tsx/esm --experimental-test-module-mocks --test",
-    "test:unit": "node --import tsx/esm --experimental-test-module-mocks --test 'src/modules/shared/utils/*.test.ts' 'src/modules/shared/auth/*.test.ts' 'src/features/*/domain/**/*.test.ts' 'src/features/*/application/*.test.ts' 'src/features/*/infrastructure/ai/**/*.test.ts' 'src/features/*/interfaces/http/handlers/*.test.ts'",
-    "test:integration": "node --import tsx/esm --experimental-test-module-mocks --test 'src/features/*/__tests__/*.integration.test.ts'",
-    "test:e2e": "node --import tsx/esm --experimental-test-module-mocks --test 'src/features/*/__tests__/*.e2e.test.ts'",
-    "test:coverage": "node --import tsx/esm --experimental-test-module-mocks --experimental-test-coverage --test"
+    "test": "NODE_ENV=test node --import tsx/esm --experimental-test-module-mocks --test",
+    "test:unit": "NODE_ENV=test node --import tsx/esm --experimental-test-module-mocks --test 'src/modules/shared/utils/*.test.ts' 'src/modules/shared/auth/*.test.ts' 'src/modules/shared/config/*.test.ts' 'src/features/*/domain/**/*.test.ts' 'src/features/*/application/*.test.ts' 'src/features/*/infrastructure/ai/**/*.test.ts' 'src/features/*/interfaces/http/handlers/*.test.ts'",
+    "test:integration": "NODE_ENV=test node --import tsx/esm --experimental-test-module-mocks --test 'src/features/*/__tests__/*.integration.test.ts'",
+    "test:e2e": "NODE_ENV=test node --import tsx/esm --experimental-test-module-mocks --test 'src/features/*/__tests__/*.e2e.test.ts'",
+    "test:coverage": "NODE_ENV=test node --import tsx/esm --experimental-test-module-mocks --experimental-test-coverage --test"
   },
   "dependencies": {
     "@fastify/type-provider-zod": "^1.0.0",

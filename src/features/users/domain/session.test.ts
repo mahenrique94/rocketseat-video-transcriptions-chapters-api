@@ -13,7 +13,6 @@ describe('Session', () => {
 
     assert.strictEqual(session.jtiHash, Session.hashJti('jti-123'))
     assert.strictEqual(session.userId, 'user-001')
-    assert.strictEqual(session.revokedAt, null)
     assert.ok(session.id)
     assert.ok(session.createdAt instanceof Date)
   })
@@ -47,27 +46,12 @@ describe('Session', () => {
     assert.strictEqual(session.isExpired(new Date('2025-01-01T00:00:00.000Z')), false)
   })
 
-  it('deve retornar revogado após o método revoke', () => {
-    const session = Session.create({
-      userId: 'user-001',
-      jti: 'jti-123',
-      expiresAt: new Date('2030-01-01T00:00:00.000Z'),
-    })
-
-    const revoked = session.revoke(new Date('2025-01-01T00:00:00.000Z'))
-
-    assert.strictEqual(revoked.isRevoked(), true)
-    assert.strictEqual(revoked.revokedAt?.toISOString(), '2025-01-01T00:00:00.000Z')
-    assert.strictEqual(session.isRevoked(), false)
-  })
-
   it('deve reconstruir a entidade a partir dos dados de persistência', () => {
     const session = Session.toEntity({
       id: 'session-001',
       jtiHash: 'hash',
       userId: 'user-001',
       expiresAt: new Date('2030-01-01T00:00:00.000Z'),
-      revokedAt: null,
       createdAt: new Date('2025-01-01T00:00:00.000Z'),
     })
 

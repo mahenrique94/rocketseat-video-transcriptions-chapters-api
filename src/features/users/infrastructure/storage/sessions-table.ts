@@ -6,9 +6,9 @@ export const sessions = pgTable('sessions', {
   jtiHash: text('jti_hash').notNull().unique(),
   userId: varchar('user_id', { length: 21 })
     .notNull()
-    .references(() => users.id, { onDelete: 'cascade' }),
+    .references(() => users.id, { onDelete: 'cascade' })
+    .unique(),
   expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),
-  revokedAt: timestamp('revoked_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).notNull(),
 })
 

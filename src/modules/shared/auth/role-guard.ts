@@ -17,7 +17,7 @@ export class RoleGuard {
     }
 
     if (request.user.role !== 'admin') {
-      return reply.status(403).send({ message: 'Acesso restrito a administradores' })
+      return reply.status(404).send({ message: 'Not found' })
     }
   }
 }

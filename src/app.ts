@@ -19,6 +19,7 @@ import { CreateUserHandler } from '@features/users/interfaces/http/handlers/crea
 import { SignInHandler } from '@features/users/interfaces/http/handlers/sign-in-handler'
 import { RefreshTokenHandler } from '@features/users/interfaces/http/handlers/refresh-token-handler'
 import { SignOutHandler } from '@features/users/interfaces/http/handlers/sign-out-handler'
+import { ConfirmAccountHandler } from '@features/users/interfaces/http/handlers/confirm-account-handler'
 import { CreateChaptersUseCase } from '@features/chapters/application/create-chapters-use-case'
 import { GetChaptersByVideoIdUseCase } from '@features/chapters/application/get-chapters-by-video-id-use-case'
 import { DeleteChaptersUseCase } from '@features/chapters/application/delete-chapters-use-case'
@@ -26,9 +27,11 @@ import { CreateUserUseCase } from '@features/users/application/create-user-use-c
 import { SignInUseCase } from '@features/users/application/sign-in-use-case'
 import { RefreshTokenUseCase } from '@features/users/application/refresh-token-use-case'
 import { SignOutUseCase } from '@features/users/application/sign-out-use-case'
+import { ConfirmAccountUseCase } from '@features/users/application/confirm-account-use-case'
 import { isDbError, getDbError } from '@shared/utils/db-errors'
 import { JsonWebTokenProvider } from '@shared/auth/jsonwebtoken-provider'
 import { RefreshTokenGenerator } from '@shared/auth/refresh-token-generator'
+import { ConfirmationTokenGenerator } from '@shared/auth/confirmation-token-generator'
 import { AuthGuard } from '@shared/auth/auth-guard'
 import { RoleGuard } from '@shared/auth/role-guard'
 import type { IJwtProvider } from '@shared/auth/jwt-provider'
@@ -39,6 +42,7 @@ import type { IChaptersRepository } from '@features/chapters/infrastructure/stor
 import type { IUsersRepository } from '@features/users/infrastructure/storage/users-repository'
 import type { IRefreshTokensRepository } from '@features/users/infrastructure/storage/refresh-tokens-repository'
 import type { ISessionsRepository } from '@features/users/infrastructure/storage/sessions-repository'
+import { config } from '@shared/config/index'
 import db from '@shared/db/index'
 import { VideosPostgresRepository } from '@features/videos/infrastructure/storage/videos-postgres-repository'
 import { TranscriptionsPostgresRepository } from '@features/transcriptions/infrastructure/storage/transcriptions-postgres-repository'
@@ -103,10 +107,11 @@ export function buildApp(deps?: AppDependencies) {
   app.decorateRequest<UserPayload>('user', undefined as unknown as UserPayload)
 
   const jwtProvider = deps?.jwtProvider ?? new JsonWebTokenProvider(
-    process.env.JWT_SECRET ?? 'rocketseat-fastify-dev-secret',
+    config.JWT_SECRET,
   )
+  const usersRepository = deps?.usersRepository ?? new UsersPostgresRepository(db)
   const sessionsRepository = deps?.sessionsRepository ?? new SessionsPostgresRepository(db)
-  const authGuard = new AuthGuard(jwtProvider, sessionsRepository)
+  const authGuard = new AuthGuard(jwtProvider, sessionsRepository, usersRepository)
   const roleGuard = new RoleGuard(['/api/v1/auth/sign-out'])
 
   app.addHook('preHandler', async (request, reply) => {
@@ -114,6 +119,7 @@ export function buildApp(deps?: AppDependencies) {
       "/api/v1/auth/sign-in",
       "/api/v1/auth/sign-up",
       "/api/v1/auth/refresh-token",
+      "/api/v1/auth/confirm",
       "/api/docs"
     ]
     
@@ -132,12 +138,13 @@ export function buildApp(deps?: AppDependencies) {
   const videoRepository = deps?.videoRepository ?? new VideosPostgresRepository(db)
   const transcriptionsRepository = deps?.transcriptionsRepository ?? new TranscriptionsPostgresRepository(db)
   const chaptersRepository = deps?.chaptersRepository ?? new ChaptersPostgresRepository(db)
-  const usersRepository = deps?.usersRepository ?? new UsersPostgresRepository(db)
   const refreshTokensRepository = deps?.refreshTokensRepository ?? new RefreshTokensPostgresRepository(db)
 
-  const accessTokenExpiresIn = process.env.JWT_ACCESS_TOKEN_EXPIRES_IN ?? '15m'
-  const refreshTokenExpiresInDays = Number(process.env.REFRESH_TOKEN_EXPIRES_IN_DAYS ?? '30')
+  const accessTokenExpiresIn = config.JWT_ACCESS_TOKEN_EXPIRES_IN
+  const refreshTokenExpiresInDays = config.REFRESH_TOKEN_EXPIRES_IN_DAYS
+  const confirmationTokenExpiresInHours = config.CONFIRMATION_TOKEN_EXPIRES_IN_HOURS
   const refreshTokenGenerator = new RefreshTokenGenerator()
+  const confirmationTokenGenerator = new ConfirmationTokenGenerator()
 
   const createChaptersUseCase = new CreateChaptersUseCase(videoRepository, chaptersRepository)
   const getChaptersByVideoIdUseCase = new GetChaptersByVideoIdUseCase(videoRepository, chaptersRepository)
@@ -145,7 +152,11 @@ export function buildApp(deps?: AppDependencies) {
   const createChapterHandler = new CreateChapterHandler(createChaptersUseCase)
   const getChapterByVideoIdHandler = new GetChapterByVideoIdHandler(getChaptersByVideoIdUseCase)
   const deleteChapterHandler = new DeleteChapterHandler(deleteChaptersUseCase)
-  const createUserUseCase = new CreateUserUseCase(usersRepository)
+  const createUserUseCase = new CreateUserUseCase(
+    usersRepository,
+    confirmationTokenGenerator,
+    confirmationTokenExpiresInHours,
+  )
   const createUserHandler = new CreateUserHandler(createUserUseCase)
   const signInUseCase = new SignInUseCase(
     usersRepository,
@@ -169,11 +180,13 @@ export function buildApp(deps?: AppDependencies) {
   const refreshTokenHandler = new RefreshTokenHandler(refreshTokenUseCase)
   const signOutUseCase = new SignOutUseCase(sessionsRepository, refreshTokensRepository)
   const signOutHandler = new SignOutHandler(signOutUseCase)
+  const confirmAccountUseCase = new ConfirmAccountUseCase(usersRepository)
+  const confirmAccountHandler = new ConfirmAccountHandler(confirmAccountUseCase)
 
   app.register(videoRoutes, { videoRepository })
   app.register(transcriptionsRoutes, { videoRepository, transcriptionsRepository })
   app.register(chaptersRoutes, { createChapterHandler, getChapterByVideoIdHandler, deleteChapterHandler })
-  app.register(usersRoutes, { createUserHandler, signInHandler, refreshTokenHandler, signOutHandler })
+  app.register(usersRoutes, { createUserHandler, signInHandler, refreshTokenHandler, signOutHandler, confirmAccountHandler })
 
   return app
 }

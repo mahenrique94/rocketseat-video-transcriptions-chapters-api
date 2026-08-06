@@ -4,6 +4,7 @@ import type { CreateUserHandler } from './handlers/create-user-handler'
 import type { SignInHandler } from './handlers/sign-in-handler'
 import type { RefreshTokenHandler } from './handlers/refresh-token-handler'
 import type { SignOutHandler } from './handlers/sign-out-handler'
+import type { ConfirmAccountHandler } from './handlers/confirm-account-handler'
 import {
   signUpSchema,
   signInSchema,
@@ -12,6 +13,8 @@ import {
   signInResponseSchema,
   refreshTokenResponseSchema,
   signOutResponseSchema,
+  confirmAccountBodySchema,
+  confirmAccountResponseSchema,
 } from './schemas.ts'
 import { errorResponseSchema } from '@features/videos/interfaces/http/schemas'
 
@@ -22,9 +25,16 @@ export async function usersRoutes(
     signInHandler: SignInHandler
     refreshTokenHandler: RefreshTokenHandler
     signOutHandler: SignOutHandler
+    confirmAccountHandler: ConfirmAccountHandler
   },
 ) {
-  const { createUserHandler, signInHandler, refreshTokenHandler, signOutHandler } = opts
+  const {
+    createUserHandler,
+    signInHandler,
+    refreshTokenHandler,
+    signOutHandler,
+    confirmAccountHandler,
+  } = opts
 
   app.withTypeProvider<ZodTypeProvider>().route({
     method: 'POST',
@@ -49,7 +59,7 @@ export async function usersRoutes(
       response: {
         200: signInResponseSchema,
         400: errorResponseSchema,
-        403: errorResponseSchema,
+        401: errorResponseSchema,
         500: errorResponseSchema,
       },
     },
@@ -64,7 +74,7 @@ export async function usersRoutes(
       response: {
         200: refreshTokenResponseSchema,
         400: errorResponseSchema,
-        403: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema,
       },
     },
@@ -77,10 +87,25 @@ export async function usersRoutes(
     schema: {
       response: {
         200: signOutResponseSchema,
-        401: errorResponseSchema,
+        404: errorResponseSchema,
         500: errorResponseSchema,
       },
     },
     handler: (request, reply) => signOutHandler.execute(request, reply),
+  })
+
+  app.withTypeProvider<ZodTypeProvider>().route({
+    method: 'POST',
+    url: '/api/v1/auth/confirm',
+    schema: {
+      body: confirmAccountBodySchema,
+      response: {
+        200: confirmAccountResponseSchema,
+        400: errorResponseSchema,
+        404: errorResponseSchema,
+        500: errorResponseSchema,
+      },
+    },
+    handler: (request, reply) => confirmAccountHandler.execute(request, reply),
   })
 }

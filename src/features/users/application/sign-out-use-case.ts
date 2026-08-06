@@ -11,7 +11,7 @@ export class SignOutUseCase implements UseCase<SignOutDTO, void> {
   ) {}
 
   async execute(input: SignOutDTO): Promise<void> {
-    await this.sessionsRepository.revokeByJtiHash(Session.hashJti(input.jti))
+    await this.sessionsRepository.deleteByJtiHash(Session.hashJti(input.jti))
     await this.refreshTokensRepository.revokeAllActiveByUserId(input.userId)
   }
 }

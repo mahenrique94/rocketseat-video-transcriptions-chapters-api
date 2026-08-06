@@ -7,7 +7,6 @@ export class Session {
     public readonly jtiHash: string,
     public readonly userId: string,
     public readonly expiresAt: Date,
-    public readonly revokedAt: Date | null,
     public readonly createdAt: Date,
   ) {}
 
@@ -22,7 +21,6 @@ export class Session {
       Session.hashJti(params.jti),
       params.userId,
       params.expiresAt,
-      null,
       now,
     )
   }
@@ -36,7 +34,6 @@ export class Session {
     jtiHash: string
     userId: string
     expiresAt: Date
-    revokedAt: Date | null
     createdAt: Date
   }) {
     return new Session(
@@ -44,27 +41,11 @@ export class Session {
       data.jtiHash,
       data.userId,
       data.expiresAt,
-      data.revokedAt,
       data.createdAt,
     )
   }
 
   isExpired(now = new Date()): boolean {
     return this.expiresAt <= now
-  }
-
-  isRevoked(): boolean {
-    return this.revokedAt !== null
-  }
-
-  revoke(revokedAt = new Date()): Session {
-    return new Session(
-      this.id,
-      this.jtiHash,
-      this.userId,
-      this.expiresAt,
-      revokedAt,
-      this.createdAt,
-    )
   }
 }

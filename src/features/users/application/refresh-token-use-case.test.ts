@@ -48,19 +48,8 @@ describe('RefreshTokenUseCase', () => {
       email: 'john@example.com',
       password: passwordHash,
     })
-    if (overrides.active === false) {
-      user = new User(
-        user.id,
-        user.firstName,
-        user.lastName,
-        user.email,
-        user.password,
-        user.createdAt,
-        user.updatedAt,
-        false,
-        user.deletedAt,
-        user.role,
-      )
+    if (overrides.active !== false) {
+      user = user.activate()
     }
     await usersRepository.createUser(user)
     return user
@@ -110,7 +99,7 @@ describe('RefreshTokenUseCase', () => {
     assert.strictEqual(newToken.userId, user.id)
   })
 
-  it('deve assinar o novo token com jti e criar uma sessão ativa', async () => {
+  it('deve assinar o novo token com jti e persistir uma sessão ativa', async () => {
     const user = await seedUser()
     await seedRefreshToken(user.id)
 
@@ -127,10 +116,9 @@ describe('RefreshTokenUseCase', () => {
     const session = await sessionsRepository.findByJtiHash(Session.hashJti(jti!))
     assert.ok(session)
     assert.strictEqual(session.userId, user.id)
-    assert.strictEqual(session.isRevoked(), false)
   })
 
-  it('deve revogar a sessão anterior ao renovar o token (uma sessão por usuário)', async () => {
+  it('deve substituir a sessão anterior ao renovar o token (uma sessão por usuário)', async () => {
     const user = await seedUser()
     await seedRefreshToken(user.id)
 
@@ -139,15 +127,14 @@ describe('RefreshTokenUseCase', () => {
       jti: 'jti-anterior',
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
-    await sessionsRepository.save(oldSession)
+    await sessionsRepository.upsertByUserId(oldSession)
 
     await useCase.execute({
       refreshToken: 'refresh-token-value',
     })
 
     const storedOldSession = await sessionsRepository.findByJtiHash(Session.hashJti('jti-anterior'))
-    assert.ok(storedOldSession)
-    assert.strictEqual(storedOldSession.isRevoked(), true)
+    assert.strictEqual(storedOldSession, null)
   })
 
   it('deve lançar InvalidRefreshToken quando o token não existe', async () => {

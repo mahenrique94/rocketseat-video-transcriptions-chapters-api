@@ -14,7 +14,7 @@ export class RefreshTokenHandler {
       return reply.status(200).send(result)
     } catch (error) {
       if (error instanceof InvalidRefreshToken) {
-        return reply.status(403).send({ message: error.message })
+        return reply.status(404).send({ message: error.message })
       }
       throw error
     }

@@ -3,11 +3,10 @@ import assert from 'node:assert/strict'
 import pg from 'pg'
 import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq } from 'drizzle-orm'
-import * as schema from '@shared/db/schema'
+import * as schema from '@externals/db/schema'
+import { config } from '@shared/config/index'
 
-const e2eDbUrl =
-  process.env.E2E_DATABASE_URL ||
-  process.env.DATABASE_URL
+const e2eDbUrl = config.E2E_DATABASE_URL || config.DATABASE_URL
 
 const dbAvailable = !!e2eDbUrl
 
@@ -89,7 +88,9 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
     assert.strictEqual(body.firstName, 'John')
     assert.strictEqual(body.lastName, 'Doe')
     assert.strictEqual(body.email, 'john@example.com')
-    assert.strictEqual(body.active, true)
+    assert.strictEqual(body.active, false)
+    assert.ok(body.confirmationToken)
+    assert.strictEqual(typeof body.confirmationToken, 'string')
     assert.ok(body.createdAt)
     assert.ok(body.updatedAt)
     assert.ok(!('password' in body))
@@ -171,8 +172,27 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
     })
   }
 
-  it('POST /api/v1/auth/sign-in - deve autenticar com e-mail e senha corretos', async () => {
-    await signUp('signin@example.com')
+  async function signUpAndConfirm(email: string) {
+    const signUpResponse = await signUp(email)
+
+    if (signUpResponse.statusCode === 409) {
+      return signUpResponse.json()
+    }
+
+    const { confirmationToken } = signUpResponse.json() as { confirmationToken: string }
+
+    const confirmResponse = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/confirm',
+      body: { token: confirmationToken },
+    })
+    assert.strictEqual(confirmResponse.statusCode, 200)
+
+    return signUpResponse.json()
+  }
+
+  it('POST /api/v1/auth/sign-in - deve autenticar com e-mail e senha corretos após confirmar a conta', async () => {
+    await signUpAndConfirm('signin@example.com')
 
     const response = await app.inject({
       method: 'POST',
@@ -192,7 +212,23 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
     assert.ok(!('password' in body))
   })
 
-  it('POST /api/v1/auth/sign-in - deve retornar 403 para e-mail inexistente', async () => {
+  it('POST /api/v1/auth/sign-in - deve retornar 401 para conta ainda não confirmada', async () => {
+    await signUp('nao-confirmada@example.com')
+
+    const response = await app.inject({
+      method: 'POST',
+      url: '/api/v1/auth/sign-in',
+      body: {
+        email: 'nao-confirmada@example.com',
+        password: 'secret123',
+      },
+    })
+
+    assert.strictEqual(response.statusCode, 401)
+    assert.strictEqual(response.json().message, 'Email ou senha inválidos')
+  })
+
+  it('POST /api/v1/auth/sign-in - deve retornar 401 para e-mail inexistente', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/v1/auth/sign-in',
@@ -202,12 +238,12 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
       },
     })
 
-    assert.strictEqual(response.statusCode, 403)
+    assert.strictEqual(response.statusCode, 401)
     assert.strictEqual(response.json().message, 'Email ou senha inválidos')
   })
 
-  it('POST /api/v1/auth/sign-in - deve retornar 403 para senha incorreta', async () => {
-    await signUp('senha-errada@example.com')
+  it('POST /api/v1/auth/sign-in - deve retornar 401 para senha incorreta', async () => {
+    await signUpAndConfirm('senha-errada@example.com')
 
     const response = await app.inject({
       method: 'POST',
@@ -218,7 +254,7 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
       },
     })
 
-    assert.strictEqual(response.statusCode, 403)
+    assert.strictEqual(response.statusCode, 401)
     assert.strictEqual(response.json().message, 'Email ou senha inválidos')
   })
 
@@ -233,10 +269,81 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
     assert.strictEqual(response.json().message, 'Validation error')
   })
 
+  describe('POST /api/v1/auth/confirm', () => {
+    it('deve ativar a conta com um token válido e permitir o login', async () => {
+      const email = 'confirm@example.com'
+      const signUpResponse = await signUp(email)
+      const { confirmationToken } = signUpResponse.json() as { confirmationToken: string }
+
+      const confirmResponse = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/confirm',
+        body: { token: confirmationToken },
+      })
+
+      assert.strictEqual(confirmResponse.statusCode, 200)
+      assert.strictEqual(confirmResponse.json().message, 'Conta confirmada com sucesso')
+
+      const signInResponse = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/sign-in',
+        body: {
+          email,
+          password: 'secret123',
+        },
+      })
+
+      assert.strictEqual(signInResponse.statusCode, 200)
+    })
+
+    it('deve retornar 404 para um token inválido', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/confirm',
+        body: { token: 'token-invalido' },
+      })
+
+      assert.strictEqual(response.statusCode, 404)
+      assert.strictEqual(response.json().message, 'Token de confirmação inválido ou expirado')
+    })
+
+    it('deve retornar 404 ao reutilizar um token já confirmado', async () => {
+      const email = 'confirm-reuse@example.com'
+      const signUpResponse = await signUp(email)
+      const { confirmationToken } = signUpResponse.json() as { confirmationToken: string }
+
+      const first = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/confirm',
+        body: { token: confirmationToken },
+      })
+      const second = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/confirm',
+        body: { token: confirmationToken },
+      })
+
+      assert.strictEqual(first.statusCode, 200)
+      assert.strictEqual(second.statusCode, 404)
+      assert.strictEqual(second.json().message, 'Token de confirmação inválido ou expirado')
+    })
+
+    it('deve retornar 400 quando o token não é informado', async () => {
+      const response = await app.inject({
+        method: 'POST',
+        url: '/api/v1/auth/confirm',
+        body: {},
+      })
+
+      assert.strictEqual(response.statusCode, 400)
+      assert.strictEqual(response.json().message, 'Validation error')
+    })
+  })
+
   describe('POST /api/v1/auth/refresh-token', () => {
     async function signIn() {
       const email = 'refresh@example.com'
-      await signUp(email)
+      await signUpAndConfirm(email)
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/sign-in',
@@ -264,7 +371,7 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
       assert.notStrictEqual(body.refreshToken, refreshToken)
     })
 
-    it('deve retornar 403 ao reutilizar um refresh token já rotacionado', async () => {
+    it('deve retornar 404 ao reutilizar um refresh token já rotacionado', async () => {
       const { refreshToken } = await signIn()
 
       await app.inject({
@@ -279,18 +386,18 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
         body: { refreshToken },
       })
 
-      assert.strictEqual(response.statusCode, 403)
+      assert.strictEqual(response.statusCode, 404)
       assert.strictEqual(response.json().message, 'Refresh token inválido ou expirado')
     })
 
-    it('deve retornar 403 para um refresh token inválido', async () => {
+    it('deve retornar 404 para um refresh token inválido', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/refresh-token',
         body: { refreshToken: 'token-invalido' },
       })
 
-      assert.strictEqual(response.statusCode, 403)
+      assert.strictEqual(response.statusCode, 404)
       assert.strictEqual(response.json().message, 'Refresh token inválido ou expirado')
     })
 
@@ -308,7 +415,7 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
 
   describe('Sessão única por usuário', () => {
     async function signIn(email: string) {
-      await signUp(email)
+      await signUpAndConfirm(email)
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/sign-in',
@@ -335,15 +442,15 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
         headers: { authorization: `Bearer ${second.token}` },
       })
 
-      assert.strictEqual(firstResponse.statusCode, 401)
-      assert.strictEqual(firstResponse.json().message, 'Sessão inválida ou expirada')
+      assert.strictEqual(firstResponse.statusCode, 404)
+      assert.strictEqual(firstResponse.json().message, 'Not found')
       assert.strictEqual(secondResponse.statusCode, 200)
     })
   })
 
   describe('POST /api/v1/auth/sign-out', () => {
     async function signIn(email: string) {
-      await signUp(email)
+      await signUpAndConfirm(email)
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/sign-in',
@@ -373,8 +480,8 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
         headers: { authorization: `Bearer ${token}` },
       })
 
-      assert.strictEqual(afterResponse.statusCode, 401)
-      assert.strictEqual(afterResponse.json().message, 'Sessão inválida ou expirada')
+      assert.strictEqual(afterResponse.statusCode, 404)
+      assert.strictEqual(afterResponse.json().message, 'Not found')
     })
 
     it('deve invalidar os refresh tokens do usuário ao encerrar a sessão', async () => {
@@ -392,18 +499,18 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
         body: { refreshToken },
       })
 
-      assert.strictEqual(refreshResponse.statusCode, 403)
+      assert.strictEqual(refreshResponse.statusCode, 404)
       assert.strictEqual(refreshResponse.json().message, 'Refresh token inválido ou expirado')
     })
 
-    it('deve retornar 401 sem token de autenticação', async () => {
+    it('deve retornar 404 sem token de autenticação', async () => {
       const response = await app.inject({
         method: 'POST',
         url: '/api/v1/auth/sign-out',
       })
 
-      assert.strictEqual(response.statusCode, 401)
-      assert.strictEqual(response.json().message, 'Token de autenticação não informado')
+      assert.strictEqual(response.statusCode, 404)
+      assert.strictEqual(response.json().message, 'Not found')
     })
   })
 })

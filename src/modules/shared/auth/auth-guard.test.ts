@@ -4,7 +4,9 @@ import type { FastifyReply, FastifyRequest } from 'fastify'
 import { AuthGuard } from './auth-guard.ts'
 import { testJwtProvider } from '@shared/utils/auth-test-helpers'
 import { SessionsInMemoryRepository } from '@features/users/infrastructure/storage/sessions-in-memory-repository'
+import { UsersInMemoryRepository } from '@features/users/infrastructure/storage/users-in-memory-repository'
 import { Session } from '@features/users/domain/session'
+import { User } from '@features/users/domain/user'
 
 interface MockReply {
   statusCode: number
@@ -43,37 +45,52 @@ function makeRequest(headers: Record<string, string | undefined> = {}) {
 
 describe('AuthGuard', () => {
   let sessionsRepository: SessionsInMemoryRepository
+  let usersRepository: UsersInMemoryRepository
   let guard: AuthGuard
 
   beforeEach(async () => {
     sessionsRepository = new SessionsInMemoryRepository()
-    guard = new AuthGuard(testJwtProvider, sessionsRepository)
+    usersRepository = new UsersInMemoryRepository()
+    guard = new AuthGuard(testJwtProvider, sessionsRepository, usersRepository)
   })
 
-  async function seedSessionFor(sub: string, jti: string, options: { revoked?: boolean; expired?: boolean } = {}) {
-    let session = Session.create({
+  async function seedSessionFor(sub: string, jti: string, options: { expired?: boolean; active?: boolean } = {}) {
+    const user = User.toEntity({
+      id: sub,
+      firstName: 'John',
+      lastName: 'Doe',
+      email: `guard-${sub}@example.com`,
+      password: 'hash-nao-utilizado',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      active: options.active !== false,
+      deletedAt: null,
+      role: 'user',
+      confirmationTokenHash: null,
+      confirmationTokenExpiresAt: null,
+    })
+    await usersRepository.createUser(user)
+
+    const session = Session.create({
       userId: sub,
       jti,
       expiresAt: options.expired
         ? new Date(Date.now() - 1000)
         : new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
-    if (options.revoked) {
-      session = session.revoke()
-    }
-    await sessionsRepository.save(session)
+    await sessionsRepository.upsertByUserId(session)
   }
 
-  it('deve responder 401 quando o header Authorization não está presente', async () => {
+  it('deve responder 404 quando o header Authorization não está presente', async () => {
     const reply = createMockReply()
 
     await guard.execute(makeRequest(), reply as unknown as FastifyReply)
 
-    assert.strictEqual(reply.statusCode, 401)
-    assert.deepStrictEqual(reply.sent, { message: 'Token de autenticação não informado' })
+    assert.strictEqual(reply.statusCode, 404)
+    assert.deepStrictEqual(reply.sent, { message: 'Not found' })
   })
 
-  it('deve responder 401 quando o header não usa o esquema Bearer', async () => {
+  it('deve responder 404 quando o header não usa o esquema Bearer', async () => {
     const reply = createMockReply()
 
     await guard.execute(
@@ -81,11 +98,11 @@ describe('AuthGuard', () => {
       reply as unknown as FastifyReply,
     )
 
-    assert.strictEqual(reply.statusCode, 401)
-    assert.deepStrictEqual(reply.sent, { message: 'Token de autenticação não informado' })
+    assert.strictEqual(reply.statusCode, 404)
+    assert.deepStrictEqual(reply.sent, { message: 'Not found' })
   })
 
-  it('deve responder 401 quando o token é inválido', async () => {
+  it('deve responder 404 quando o token é inválido', async () => {
     const reply = createMockReply()
 
     await guard.execute(
@@ -93,11 +110,11 @@ describe('AuthGuard', () => {
       reply as unknown as FastifyReply,
     )
 
-    assert.strictEqual(reply.statusCode, 401)
-    assert.deepStrictEqual(reply.sent, { message: 'Token de autenticação inválido ou expirado' })
+    assert.strictEqual(reply.statusCode, 404)
+    assert.deepStrictEqual(reply.sent, { message: 'Not found' })
   })
 
-  it('deve responder 401 quando não existe sessão para o token', async () => {
+  it('deve responder 404 quando não existe sessão para o token', async () => {
     const reply = createMockReply()
     const token = testJwtProvider.sign({ sub: 'user-123', email: 'john@example.com', role: 'user', jti: 'jti-sem-sessao' })
 
@@ -106,25 +123,11 @@ describe('AuthGuard', () => {
       reply as unknown as FastifyReply,
     )
 
-    assert.strictEqual(reply.statusCode, 401)
-    assert.deepStrictEqual(reply.sent, { message: 'Sessão inválida ou expirada' })
+    assert.strictEqual(reply.statusCode, 404)
+    assert.deepStrictEqual(reply.sent, { message: 'Not found' })
   })
 
-  it('deve responder 401 quando a sessão está revogada', async () => {
-    await seedSessionFor('user-123', 'jti-revogado', { revoked: true })
-    const reply = createMockReply()
-    const token = testJwtProvider.sign({ sub: 'user-123', email: 'john@example.com', role: 'user', jti: 'jti-revogado' })
-
-    await guard.execute(
-      makeRequest({ authorization: `Bearer ${token}` }),
-      reply as unknown as FastifyReply,
-    )
-
-    assert.strictEqual(reply.statusCode, 401)
-    assert.deepStrictEqual(reply.sent, { message: 'Sessão inválida ou expirada' })
-  })
-
-  it('deve responder 401 quando a sessão está expirada', async () => {
+  it('deve responder 404 quando a sessão está expirada', async () => {
     await seedSessionFor('user-123', 'jti-expirado', { expired: true })
     const reply = createMockReply()
     const token = testJwtProvider.sign({ sub: 'user-123', email: 'john@example.com', role: 'user', jti: 'jti-expirado' })
@@ -134,11 +137,25 @@ describe('AuthGuard', () => {
       reply as unknown as FastifyReply,
     )
 
-    assert.strictEqual(reply.statusCode, 401)
-    assert.deepStrictEqual(reply.sent, { message: 'Sessão inválida ou expirada' })
+    assert.strictEqual(reply.statusCode, 404)
+    assert.deepStrictEqual(reply.sent, { message: 'Not found' })
   })
 
-  it('deve responder 401 quando a sessão pertence a outro usuário', async () => {
+  it('deve responder 404 quando a conta do usuário está inativa', async () => {
+    await seedSessionFor('user-123', 'jti-inativo', { active: false })
+    const reply = createMockReply()
+    const token = testJwtProvider.sign({ sub: 'user-123', email: 'john@example.com', role: 'user', jti: 'jti-inativo' })
+
+    await guard.execute(
+      makeRequest({ authorization: `Bearer ${token}` }),
+      reply as unknown as FastifyReply,
+    )
+
+    assert.strictEqual(reply.statusCode, 404)
+    assert.deepStrictEqual(reply.sent, { message: 'Not found' })
+  })
+
+  it('deve responder 404 quando a sessão pertence a outro usuário', async () => {
     await seedSessionFor('user-outro', 'jti-123')
     const reply = createMockReply()
     const token = testJwtProvider.sign({ sub: 'user-123', email: 'john@example.com', role: 'user', jti: 'jti-123' })
@@ -148,8 +165,8 @@ describe('AuthGuard', () => {
       reply as unknown as FastifyReply,
     )
 
-    assert.strictEqual(reply.statusCode, 401)
-    assert.deepStrictEqual(reply.sent, { message: 'Sessão inválida ou expirada' })
+    assert.strictEqual(reply.statusCode, 404)
+    assert.deepStrictEqual(reply.sent, { message: 'Not found' })
   })
 
   it('deve injetar o usuário no request quando token e sessão são válidos', async () => {

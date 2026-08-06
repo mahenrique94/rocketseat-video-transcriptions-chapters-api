@@ -36,6 +36,10 @@ export class SignInUseCase implements UseCase<SignInDTO, SignInResponseDTO> {
       throw new InvalidCredentials('Email ou senha inválidos')
     }
 
+    if (!user.active) {
+      throw new InvalidCredentials('Email ou senha inválidos')
+    }
+
     const jti = nanoid()
     const token = this.jwtProvider.sign(
       {
@@ -47,13 +51,13 @@ export class SignInUseCase implements UseCase<SignInDTO, SignInResponseDTO> {
       this.accessTokenExpiresIn,
     )
 
-    await this.sessionsRepository.revokeAllActiveByUserId(user.id)
     const session = Session.create({
       userId: user.id,
       jti,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
-    await this.sessionsRepository.save(session)
+
+    await this.sessionsRepository.upsertByUserId(session)
 
     const refreshToken = this.refreshTokenGenerator.generate()
     const refreshTokenEntity = RefreshToken.create({

@@ -12,6 +12,7 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
     "paths": {
+      "@externals/*": ["./src/externals/*"],
       "@features/*": ["./src/features/*"],
       "@shared/*": ["./src/modules/shared/*"]
     }

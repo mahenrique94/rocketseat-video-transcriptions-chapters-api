@@ -57,13 +57,13 @@ export class RefreshTokenUseCase implements UseCase<RefreshTokenDTO, RefreshToke
       this.accessTokenExpiresIn,
     )
 
-    await this.sessionsRepository.revokeAllActiveByUserId(user.id)
     const session = Session.create({
       userId: user.id,
       jti,
       expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
     })
-    await this.sessionsRepository.save(session)
+
+    await this.sessionsRepository.upsertByUserId(session)
 
     return new RefreshTokenResponseDTO(token, newRefreshToken)
   }

@@ -17,7 +17,7 @@ export class SignInHandler {
       return reply.status(200).send(result)
     } catch (error) {
       if (error instanceof InvalidCredentials) {
-        return reply.status(403).send({ message: error.message })
+        return reply.status(401).send({ message: error.message })
       }
       throw error
     }

@@ -77,7 +77,7 @@ describe('SignInHandler', () => {
     assert.strictEqual(useCase.calls[0].password, 'secret123')
   })
 
-  it('deve responder 403 quando as credenciais são inválidas', async () => {
+  it('deve responder 401 quando as credenciais são inválidas', async () => {
     const useCase = makeUseCase({ error: new InvalidCredentials('Email ou senha inválidos') })
     const handler = new SignInHandler(useCase as unknown as SignInUseCase)
     const reply = createMockReply()
@@ -90,7 +90,7 @@ describe('SignInHandler', () => {
 
     await handler.execute(request, reply as unknown as FastifyReply)
 
-    assert.strictEqual(reply.statusCode, 403)
+    assert.strictEqual(reply.statusCode, 401)
     assert.deepStrictEqual(reply.sent, { message: 'Email ou senha inválidos' })
   })
 

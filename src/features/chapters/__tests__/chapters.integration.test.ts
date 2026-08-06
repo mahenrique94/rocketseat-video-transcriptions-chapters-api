@@ -8,6 +8,7 @@ import type { IVideosRepository } from '@features/videos/infrastructure/storage/
 import type { IChaptersRepository } from '../infrastructure/storage/chapters-repository'
 import { testJwtProvider, seedSession } from '@shared/utils/auth-test-helpers'
 import { SessionsInMemoryRepository } from '@features/users/infrastructure/storage/sessions-in-memory-repository'
+import { UsersInMemoryRepository } from '@features/users/infrastructure/storage/users-in-memory-repository'
 
 const suppressConsole = mock.method(console, 'error', () => {})
 after(() => suppressConsole.mock.restore())
@@ -69,6 +70,7 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
   let videoRepository: VideosInMemoryRepository
   let chaptersRepository: ChaptersInMemoryRepository
   let sessionsRepository: SessionsInMemoryRepository
+  let usersRepository: UsersInMemoryRepository
   let authHeaders: { authorization: string }
   let adminHeaders: { authorization: string }
 
@@ -76,9 +78,10 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
     videoRepository = new VideosInMemoryRepository()
     chaptersRepository = new ChaptersInMemoryRepository()
     sessionsRepository = new SessionsInMemoryRepository()
-    authHeaders = (await seedSession(sessionsRepository)).headers
-    adminHeaders = (await seedSession(sessionsRepository, { sub: 'admin-001', role: 'admin' })).headers
-    app = buildApp({ videoRepository, chaptersRepository, sessionsRepository, jwtProvider: testJwtProvider })
+    usersRepository = new UsersInMemoryRepository()
+    authHeaders = (await seedSession(sessionsRepository, {}, usersRepository)).headers
+    adminHeaders = (await seedSession(sessionsRepository, { sub: 'admin-001', role: 'admin' }, usersRepository)).headers
+    app = buildApp({ videoRepository, chaptersRepository, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
     await app.ready()
   })
 
@@ -235,13 +238,13 @@ describe('Chapters - /api/v2/videos/:id/chapters', () => {
     })
   })
 
-  it('DELETE - deve retornar 403 para usuário comum', async () => {
+  it('DELETE - deve retornar 404 para usuário comum', async () => {
     const response = await inject({
       method: 'DELETE',
       url: '/api/v2/videos/video-001/chapters',
     })
 
-    assert.strictEqual(response.statusCode, 403)
-    assert.strictEqual(response.json().message, 'Acesso restrito a administradores')
+    assert.strictEqual(response.statusCode, 404)
+    assert.strictEqual(response.json().message, 'Not found')
   })
 })

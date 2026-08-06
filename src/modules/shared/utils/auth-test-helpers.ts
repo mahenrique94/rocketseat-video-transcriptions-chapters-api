@@ -6,7 +6,8 @@ import type { JwtPayload } from '@shared/auth/jwt-provider'
 import { Session } from '@features/users/domain/session'
 import { User } from '@features/users/domain/user'
 import type { ISessionsRepository } from '@features/users/infrastructure/storage/sessions-repository'
-import * as schema from '@shared/db/schema'
+import type { IUsersRepository } from '@features/users/infrastructure/storage/users-repository'
+import * as schema from '@externals/db/schema'
 
 export const TEST_JWT_SECRET = 'rocketseat-fastify-test-secret'
 
@@ -29,16 +30,35 @@ export function makeAuthHeaders(payload: Partial<JwtPayload> = {}) {
 export async function seedSession(
   sessionsRepository: ISessionsRepository,
   payload: Partial<JwtPayload> = {},
+  usersRepository?: IUsersRepository,
 ) {
   const jti = payload.jti ?? nanoid()
   const sub = payload.sub ?? 'user-001'
+
+  if (usersRepository) {
+    const user = User.toEntity({
+      id: sub,
+      firstName: 'John',
+      lastName: 'Doe',
+      email: `auth-${sub}@example.com`,
+      password: 'hash-nao-utilizado',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      active: true,
+      deletedAt: null,
+      role: payload.role ?? 'user',
+      confirmationTokenHash: null,
+      confirmationTokenExpiresAt: null,
+    })
+    await usersRepository.createUser(user)
+  }
 
   const session = Session.create({
     userId: sub,
     jti,
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   })
-  await sessionsRepository.save(session)
+  await sessionsRepository.upsertByUserId(session)
 
   return {
     session,
@@ -68,6 +88,8 @@ export async function seedDbSession(
       active: true,
       deletedAt: null,
       role,
+      confirmationTokenHash: null,
+      confirmationTokenExpiresAt: null,
     })
     await db.insert(schema.users).values(user)
   }
@@ -82,7 +104,6 @@ export async function seedDbSession(
     jtiHash: session.jtiHash,
     userId: session.userId,
     expiresAt: session.expiresAt,
-    revokedAt: session.revokedAt,
     createdAt: session.createdAt,
   })
 

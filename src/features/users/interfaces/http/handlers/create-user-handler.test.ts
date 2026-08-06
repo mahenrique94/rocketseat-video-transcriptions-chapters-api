@@ -64,8 +64,9 @@ describe('CreateUserHandler', () => {
         'john@example.com',
         createdAt,
         createdAt,
-        true,
+        false,
         'user',
+        'confirmation-token-value',
       ),
     })
     const handler = new CreateUserHandler(useCase as unknown as CreateUserUseCase)
@@ -89,6 +90,7 @@ describe('CreateUserHandler', () => {
     assert.strictEqual(sent.lastName, 'Doe')
     assert.strictEqual(sent.email, 'john@example.com')
     assert.strictEqual(sent.role, 'user')
+    assert.strictEqual(sent.confirmationToken, 'confirmation-token-value')
     assert.ok(useCase.calls[0] instanceof CreateUserDTO)
     assert.strictEqual(useCase.calls[0].password, 'secret123')
   })

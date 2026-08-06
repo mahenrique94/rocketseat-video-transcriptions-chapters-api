@@ -1,5 +1,5 @@
 import type { DbClient } from '@shared/db/index'
-import { and, eq, isNull } from 'drizzle-orm'
+import { eq } from 'drizzle-orm'
 import { sessions } from './sessions-table'
 import { Session } from '@features/users/domain/session'
 import type { ISessionsRepository } from './sessions-repository.ts'
@@ -7,7 +7,25 @@ import type { ISessionsRepository } from './sessions-repository.ts'
 export class SessionsPostgresRepository implements ISessionsRepository {
   constructor(private db: DbClient) {}
 
-  async save(session: Session) {
+  async upsertByUserId(session: Session) {
+    const [existing] = await this.db
+      .select({ id: sessions.id })
+      .from(sessions)
+      .where(eq(sessions.userId, session.userId))
+
+    if (existing) {
+      const [result] = await this.db
+        .update(sessions)
+        .set({
+          jtiHash: session.jtiHash,
+          expiresAt: session.expiresAt,
+        })
+        .where(eq(sessions.id, existing.id))
+        .returning()
+
+      return Session.toEntity(result)
+    }
+
     const [result] = await this.db
       .insert(sessions)
       .values({
@@ -15,7 +33,6 @@ export class SessionsPostgresRepository implements ISessionsRepository {
         jtiHash: session.jtiHash,
         userId: session.userId,
         expiresAt: session.expiresAt,
-        revokedAt: session.revokedAt,
         createdAt: session.createdAt,
       })
       .returning()
@@ -36,17 +53,9 @@ export class SessionsPostgresRepository implements ISessionsRepository {
     return Session.toEntity(result)
   }
 
-  async revokeAllActiveByUserId(userId: string) {
+  async deleteByJtiHash(jtiHash: string) {
     await this.db
-      .update(sessions)
-      .set({ revokedAt: new Date() })
-      .where(and(eq(sessions.userId, userId), isNull(sessions.revokedAt)))
-  }
-
-  async revokeByJtiHash(jtiHash: string) {
-    await this.db
-      .update(sessions)
-      .set({ revokedAt: new Date() })
-      .where(and(eq(sessions.jtiHash, jtiHash), isNull(sessions.revokedAt)))
+      .delete(sessions)
+      .where(eq(sessions.jtiHash, jtiHash))
   }
 }
