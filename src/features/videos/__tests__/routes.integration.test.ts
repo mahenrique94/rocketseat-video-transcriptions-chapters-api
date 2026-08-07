@@ -5,6 +5,7 @@ import { DatabaseError } from 'pg'
 import type { IVideosRepository } from '../infrastructure/storage/videos-repository.ts'
 import { Video } from '@features/videos/domain/video'
 import { VideosInMemoryRepository } from '@features/videos/infrastructure/storage/videos-in-memory-repository'
+import { InMemoryVideoProcessingQueue } from '@features/videos/infrastructure/queue/in-memory-video-processing-queue'
 import { testJwtProvider, seedSession } from '@shared/utils/auth-test-helpers'
 import { SessionsInMemoryRepository } from '@features/users/infrastructure/storage/sessions-in-memory-repository'
 import { UsersInMemoryRepository } from '@features/users/infrastructure/storage/users-in-memory-repository'
@@ -52,6 +53,7 @@ describe('/api/v2/videos', () => {
   let videoRepository: VideosInMemoryRepository
   let sessionsRepository: SessionsInMemoryRepository
   let usersRepository: UsersInMemoryRepository
+  let videoProcessingQueue: InMemoryVideoProcessingQueue
   let authHeaders: { authorization: string }
   let adminHeaders: { authorization: string }
 
@@ -59,9 +61,10 @@ describe('/api/v2/videos', () => {
     videoRepository = new VideosInMemoryRepository()
     sessionsRepository = new SessionsInMemoryRepository()
     usersRepository = new UsersInMemoryRepository()
+    videoProcessingQueue = new InMemoryVideoProcessingQueue()
     authHeaders = (await seedSession(sessionsRepository, {}, usersRepository)).headers
     adminHeaders = (await seedSession(sessionsRepository, { sub: 'admin-001', role: 'admin' }, usersRepository)).headers
-    app = buildApp({ videoRepository, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
+    app = buildApp({ videoRepository, videoProcessingQueue, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
     await app.ready()
   })
 
@@ -145,6 +148,9 @@ describe('/api/v2/videos', () => {
     assert.strictEqual(body.videoId, 'dQw4w9WgXcQ')
     assert.ok(body.id)
     assert.strictEqual(body.createdBy, 'admin-001')
+
+    assert.deepStrictEqual(videoProcessingQueue.transcriptionJobs, [body.id])
+    assert.deepStrictEqual(videoProcessingQueue.chaptersJobs, [body.id])
   })
 
   it('POST - deve persistir o vídeo criado', async () => {
@@ -200,7 +206,7 @@ describe('/api/v2/videos', () => {
       },
     }
 
-    const throwingApp = buildApp({ videoRepository: throwingRepository, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
+    const throwingApp = buildApp({ videoRepository: throwingRepository, videoProcessingQueue, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
     await throwingApp.ready()
 
     try {
@@ -227,7 +233,7 @@ describe('/api/v2/videos', () => {
       },
     }
 
-    const throwingApp = buildApp({ videoRepository: throwingRepository, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
+    const throwingApp = buildApp({ videoRepository: throwingRepository, videoProcessingQueue, sessionsRepository, usersRepository, jwtProvider: testJwtProvider })
     await throwingApp.ready()
 
     try {

@@ -12,6 +12,7 @@ describe('config', () => {
       })
 
       assert.strictEqual(result.DATABASE_URL, 'postgresql://root:root@localhost:5432/rocketseat_fastify')
+      assert.strictEqual(result.REDIS_URL, 'redis://localhost:6379')
       assert.strictEqual(result.JWT_SECRET, 'rocketseat-fastify-dev-secret')
       assert.strictEqual(result.JWT_ACCESS_TOKEN_EXPIRES_IN, '15m')
       assert.strictEqual(result.REFRESH_TOKEN_EXPIRES_IN_DAYS, 30)
@@ -39,15 +40,17 @@ describe('config', () => {
   })
 
   describe('production', () => {
-    it('exige DATABASE_URL, JWT_SECRET e OPENAI_API_KEY', () => {
-      assert.throws(() => productionEnvSchema.parse({ DATABASE_URL: 'x', JWT_SECRET: 'x' }))
-      assert.throws(() => productionEnvSchema.parse({ DATABASE_URL: 'x', OPENAI_API_KEY: 'k' }))
-      assert.throws(() => productionEnvSchema.parse({ JWT_SECRET: 'x', OPENAI_API_KEY: 'k' }))
+    it('exige DATABASE_URL, REDIS_URL, JWT_SECRET e OPENAI_API_KEY', () => {
+      assert.throws(() => productionEnvSchema.parse({ DATABASE_URL: 'x', JWT_SECRET: 'x', OPENAI_API_KEY: 'k' }))
+      assert.throws(() => productionEnvSchema.parse({ DATABASE_URL: 'x', REDIS_URL: 'r', JWT_SECRET: 'x' }))
+      assert.throws(() => productionEnvSchema.parse({ DATABASE_URL: 'x', REDIS_URL: 'r', OPENAI_API_KEY: 'k' }))
+      assert.throws(() => productionEnvSchema.parse({ REDIS_URL: 'r', JWT_SECRET: 'x', OPENAI_API_KEY: 'k' }))
     })
 
     it('não possui default para o JWT_SECRET', () => {
       const result = productionEnvSchema.parse({
         DATABASE_URL: 'postgresql://db',
+        REDIS_URL: 'redis://localhost:6379',
         JWT_SECRET: 'segredo-prod',
         OPENAI_API_KEY: 'chave',
       })

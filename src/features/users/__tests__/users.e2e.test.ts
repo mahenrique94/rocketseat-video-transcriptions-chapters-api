@@ -5,20 +5,28 @@ import { drizzle } from 'drizzle-orm/node-postgres'
 import { eq } from 'drizzle-orm'
 import * as schema from '@externals/db/schema'
 import { config } from '@shared/config/index'
+import { Redis } from 'ioredis'
 
 const e2eDbUrl = config.E2E_DATABASE_URL || config.DATABASE_URL
 
-const dbAvailable = !!e2eDbUrl
+const dbAvailable = !!e2eDbUrl && !!config.REDIS_URL
 
 let pool: pg.Pool | undefined
 let testDb: ReturnType<typeof drizzle> | undefined
+let redis: Redis | undefined
 
 if (dbAvailable) {
   pool = new pg.Pool({ connectionString: e2eDbUrl })
   testDb = drizzle(pool, { schema })
 
+  redis = new Redis(config.REDIS_URL!)
+
   mock.module('@shared/db/index', {
     exports: { default: testDb },
+  })
+
+  mock.module('@shared/redis/index', {
+    exports: { default: redis },
   })
 }
 
@@ -58,6 +66,7 @@ describe('E2E - /api/v1/auth/sign-up', { skip: !dbAvailable ? 'DATABASE_URL not 
   after(async () => {
     await app.close()
     if (pool) await pool.end()
+    if (redis) await redis.quit()
   })
 
   afterEach(async () => {

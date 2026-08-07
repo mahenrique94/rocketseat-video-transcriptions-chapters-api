@@ -7,6 +7,8 @@ import { Session } from '@features/users/domain/session'
 import { User } from '@features/users/domain/user'
 import type { ISessionsRepository } from '@features/users/infrastructure/storage/sessions-repository'
 import type { IUsersRepository } from '@features/users/infrastructure/storage/users-repository'
+import { SessionsRedisRepository } from '@features/users/infrastructure/storage/sessions-redis-repository'
+import type { RedisClient } from '@shared/redis/index'
 import * as schema from '@externals/db/schema'
 
 export const TEST_JWT_SECRET = 'rocketseat-fastify-test-secret'
@@ -68,6 +70,7 @@ export async function seedSession(
 
 export async function seedDbSession(
   db: ReturnType<typeof drizzle>,
+  redis: RedisClient,
   payload: Partial<JwtPayload> = {},
 ) {
   const sub = payload.sub ?? 'user-001'
@@ -99,13 +102,9 @@ export async function seedDbSession(
     jti,
     expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
   })
-  await db.insert(schema.sessions).values({
-    id: session.id,
-    jtiHash: session.jtiHash,
-    userId: session.userId,
-    expiresAt: session.expiresAt,
-    createdAt: session.createdAt,
-  })
+
+  const sessionsRepository = new SessionsRedisRepository(redis)
+  await sessionsRepository.upsertByUserId(session)
 
   return {
     userId: sub,

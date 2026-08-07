@@ -6,20 +6,29 @@ import { eq } from 'drizzle-orm'
 import * as schema from '@externals/db/schema'
 import { testJwtProvider, seedDbSession } from '@shared/utils/auth-test-helpers'
 import { config } from '@shared/config/index'
+import { Redis } from 'ioredis'
+import { InMemoryVideoProcessingQueue } from '@features/videos/infrastructure/queue/in-memory-video-processing-queue'
 
 const e2eDbUrl = config.E2E_DATABASE_URL || config.DATABASE_URL
 
-const dbAvailable = !!e2eDbUrl
+const dbAvailable = !!e2eDbUrl && !!config.REDIS_URL
 
 let pool: pg.Pool | undefined
 let testDb: ReturnType<typeof drizzle> | undefined
+let redis: Redis | undefined
 
 if (dbAvailable) {
   pool = new pg.Pool({ connectionString: e2eDbUrl })
   testDb = drizzle(pool, { schema })
 
+  redis = new Redis(config.REDIS_URL!)
+
   mock.module('@shared/db/index', {
     exports: { default: testDb },
+  })
+
+  mock.module('@shared/redis/index', {
+    exports: { default: redis },
   })
 }
 
@@ -52,14 +61,16 @@ describe('E2E - /api/v2/videos', { skip: !dbAvailable ? 'DATABASE_URL not config
   let app: ReturnType<typeof buildApp>
   let authHeaders: { authorization: string }
   let authUserId: string | undefined
+  let videoProcessingQueue: InMemoryVideoProcessingQueue
 
   before(async () => {
-    app = buildApp({ jwtProvider: testJwtProvider })
+    videoProcessingQueue = new InMemoryVideoProcessingQueue()
+    app = buildApp({ videoProcessingQueue, jwtProvider: testJwtProvider })
     await app.ready()
   })
 
   beforeEach(async () => {
-    const seeded = await seedDbSession(testDb!, { sub: 'e2e-videos-user', role: 'admin' })
+    const seeded = await seedDbSession(testDb!, redis!, { sub: 'e2e-videos-user', role: 'admin' })
     authHeaders = seeded.headers
     authUserId = seeded.userId
   })
@@ -67,6 +78,7 @@ describe('E2E - /api/v2/videos', { skip: !dbAvailable ? 'DATABASE_URL not config
   after(async () => {
     await app.close()
     if (pool) await pool.end()
+    if (redis) await redis.quit()
   })
 
   afterEach(async () => {
@@ -116,6 +128,9 @@ describe('E2E - /api/v2/videos', { skip: !dbAvailable ? 'DATABASE_URL not config
     assert.ok(body.createdAt)
     assert.ok(body.updatedAt)
     createdVideoIds.add(body.id)
+
+    assert.deepStrictEqual(videoProcessingQueue.transcriptionJobs, [body.id])
+    assert.deepStrictEqual(videoProcessingQueue.chaptersJobs, [body.id])
   })
 
   it('POST /api/v2/videos - deve retornar 400 para URL inválida', async () => {

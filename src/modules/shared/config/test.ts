@@ -4,6 +4,7 @@ import type { AppConfig } from './types.ts'
 export const testEnvSchema = z.object({
   DATABASE_URL: z.string().optional(),
   E2E_DATABASE_URL: z.string().optional(),
+  REDIS_URL: z.string().optional(),
   JWT_SECRET: z.string().default('test-secret'),
   JWT_ACCESS_TOKEN_EXPIRES_IN: z.string().default('15m'),
   REFRESH_TOKEN_EXPIRES_IN_DAYS: z.coerce.number().int().positive().default(30),

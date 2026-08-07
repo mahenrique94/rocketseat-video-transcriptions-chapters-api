@@ -3,6 +3,7 @@ import type { AppConfig } from './types.ts'
 
 export const developmentEnvSchema = z.object({
   DATABASE_URL: z.string().min(1),
+  REDIS_URL: z.string().min(1).default('redis://localhost:6379'),
   JWT_SECRET: z.string().min(1).default('rocketseat-fastify-dev-secret'),
   JWT_ACCESS_TOKEN_EXPIRES_IN: z.string().default('15m'),
   REFRESH_TOKEN_EXPIRES_IN_DAYS: z.coerce.number().int().positive().default(30),
