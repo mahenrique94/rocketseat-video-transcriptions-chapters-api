@@ -2,6 +2,9 @@ import { buildApp } from './app.ts'
 
 const app = buildApp({ enableVideoProcessingWorker: true })
 
-app.listen({ port: 3333 }).then(() => {
-  console.log('Server running on http://localhost:3333')
+const port = Number(process.env.PORT ?? 3333)
+const host = process.env.HOST ?? '0.0.0.0'
+
+app.listen({ port, host }).then(() => {
+  console.log(`Server running on http://${host}:${port}`)
 })
