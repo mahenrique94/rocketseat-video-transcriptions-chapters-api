@@ -3,7 +3,6 @@ dist
 .env
 .env.*
 !.env.example
-drizzle
 .git
 .gitignore
 Dockerfile

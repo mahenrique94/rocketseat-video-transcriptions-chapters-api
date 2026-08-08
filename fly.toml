@@ -7,6 +7,10 @@ app = 'rocketseat-fastify'
 primary_region = 'gru'
 
 [build]
+
+[deploy]
+  release_command = "/bin/sh -lc 'DATABASE_URL=\"$DIRECT_DATABASE_URL\" node dist/modules/shared/db/migrate.js'"
+
 [http_service]
   internal_port = 8080
   force_https = true
